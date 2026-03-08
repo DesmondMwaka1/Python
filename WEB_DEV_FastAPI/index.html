@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow - Minimalist To-Do</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        h1 { font-weight: 800; font-size: 2.5rem; color: var(--primary); }
+        p { color: var(--text-muted); }
+
+        .task-form-card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            outline: none;
+        }
+
+        input[type="text"]:focus { border-color: var(--primary); }
+
+        .add-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .add-btn:hover { opacity: 0.9; }
+
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .task-item {
+            background: var(--card);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--border);
+            transition: transform 0.1s;
+        }
+
+        .task-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .task-text.completed {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .delete-btn {
+            background: #fee2e2;
+            color: #ef4444;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.4rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2rem;
+        }
+
+        .error-msg {
+            background: #fef2f2;
+            color: #b91c1c;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            border: 1px solid #fecaca;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>TaskFlow</h1>
+            <p>Stay organized and productive</p>
+        </header>
+
+        <section class="task-form-card">
+            <form id="taskForm">
+                <div class="input-group">
+                    <input type="text" id="taskInput" placeholder="Add a new task..." required>
+                    <button type="submit" class="add-btn">Add</button>
+                </div>
+            </form>
+        </section>
+
+        <main id="taskList" class="task-list">
+            <div class="empty-state">Loading your tasks...</div>
+        </main>
+    </div>
+
+    <script>
+        // API URL - Adjust this to your local server address
+        const API_URL = 'http://127.0.0.1:8000/tasks';
+
+        const taskForm = document.getElementById('taskForm');
+        const taskInput = document.getElementById('taskInput');
+        const taskList = document.getElementById('taskList');
+
+        async function fetchTasks() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error();
+                const tasks = await response.json();
+                renderTasks(tasks);
+            } catch (err) {
+                taskList.innerHTML = `
+                    <div class="error-msg">
+                        <strong>API Connection Failed</strong><br>
+                        Make sure your local server is running at ${API_URL}
+                    </div>`;
+            }
+        }
+
+        function renderTasks(tasks) {
+            if (tasks.length === 0) {
+                taskList.innerHTML = '<div class="empty-state">No tasks found.</div>';
+                return;
+            }
+
+            taskList.innerHTML = tasks.map(task => `
+                <div class="task-item">
+                    <div class="task-info">
+                        <input type="checkbox" ${task.completed ? 'checked' : ''} 
+                            onclick="toggleTask('${task.id}', ${task.completed})">
+                        <span class="task-text ${task.completed ? 'completed' : ''}">${task.title}</span>
+                    </div>
+                    <button class="delete-btn" onclick="deleteTask('${task.id}')">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = taskInput.value;
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, completed: false })
+            });
+            taskInput.value = '';
+            fetchTasks();
+        });
+
+        async function toggleTask(id, currentStatus) {
+            await fetch(`${API_URL}/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed: !currentStatus })
+            });
+            fetchTasks();
+        }
+
+        async function deleteTask(id) {
+            await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+            fetchTasks();
+        }
+
+        window.onload = fetchTasks;
+    </script>
+</body>
+</html>
