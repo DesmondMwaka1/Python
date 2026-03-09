@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "../../AI"
+		},
+		{
+			"path": "../../../../../opt/lampp/htdocs/crudApp"
+		},
+		{
+			"path": "../../../../../opt/lampp/htdocs/Web2_PHP"
+		},
+		{
+			"path": "../../../Downloads/Past Papers/draw_io"
+		},
+		{
+			"path": "../../../../../opt/lampp/htdocs/stock_portfolio"
+		},
+		{
+			"path": "../../../../../opt/lampp/htdocs/WEB2_CAT"
+		},
+		{
+			"path": "../../AI/FX SOFTWARES/fx_news"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "python_full"
+	}
+}
