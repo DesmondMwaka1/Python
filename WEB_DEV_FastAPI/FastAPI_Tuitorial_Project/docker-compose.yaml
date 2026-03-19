@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # 1. THE DATABASE (Storage)
+  db:
+    container_name: postgres_db
+    image: postgres:17.2
+    restart: always
+    environment:
+      POSTGRES_USER: user101
+      POSTGRES_PASSWORD: COVID-2020
+      POSTGRES_DB: fastapi_crud
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"  # Access from Ubuntu on 5434
+    networks:
+      - antigravity_network
+
+  # 2. THE APP (Your FastAPI Code)
+  web:
+    build: .        # Tells Docker to look for the 'Dockerfile' here
+    container_name: fastapi_app
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app      # Syncs your local code changes to the container instantly
+    environment:
+      - DATABASE_URL=postgresql://shiftechafrica:12345678@db:5432/fastapi_crud
+    depends_on:
+      - db
+    networks:
+      - antigravity_network
+
+  # 3. THE MANAGEMENT TOOL (pgAdmin)
+  pgadmin:
+    container_name: pgadmin_ui
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5051:80"
+    networks:
+      - antigravity_network
+    depends_on:
+      - db
+
+networks:
+  antigravity_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
