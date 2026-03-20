@@ -1,0 +1,20 @@
+# Web Framework & Server
+fastapi
+uvicorn
+
+#hashing
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# Database & ORM
+sqlalchemy
+psycopg2-binary
+
+# Data Processing (Neural Network inputs)
+numpy
+pandas
+
+# Neural Network (CPU Optimized)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
