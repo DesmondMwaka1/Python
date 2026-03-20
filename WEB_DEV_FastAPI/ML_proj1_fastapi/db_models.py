@@ -14,4 +14,5 @@ class User_data(Base):
 class Employee(Base):
     __tablename__ = "Employee"
     id = Column(Integer, primary_key=True, index=True)
+    years_experience = Column(Float, nullable=False)
     salary = Column(Float, nullable=False)

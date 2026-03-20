@@ -7,4 +7,5 @@ class User_data_model(BaseModel):
     age: int
 
 class Employee_model(BaseModel):
+    years_experience: float
     salary: float

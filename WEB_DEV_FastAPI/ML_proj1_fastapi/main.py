@@ -53,12 +53,12 @@ def get_user(id:int, db: Session = Depends(get_db)):
     return "User not found"
 
 @app.get("/employees")
-def get_employees(db: Session = Depends(get_db)):
+def get_employees_data(db: Session = Depends(get_db)):
     employees = db.query(Employee).all()
     return employees
 
 @app.get("/employee/{id}")
-def get_employee(id:int, db: Session = Depends(get_db)):
+def get_employee_data(id:int, db: Session = Depends(get_db)):
     db_emp=db.query(Employee).filter(Employee.id==id).first()
     if db_emp:
         return db_emp
