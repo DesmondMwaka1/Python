@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # 1. THE DATABASE (Storage)
   db:
     container_name: postgres_db_ml1
     image: postgres:17.2
@@ -11,30 +10,35 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data # This is your "Save Game" for data
     ports:
-      - "5434:5432"  # Access from Ubuntu on 5434
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - antigravity_network
 
-  # 2. THE APP (Your FastAPI Code)
   web:
-    build: .        # Tells Docker to look for the 'Dockerfile' here
+    build: .
     container_name: ml_fastapi_app
     restart: always
     ports:
       - "8000:8000"
     volumes:
-      - .:/app      # Syncs your local code changes to the container instantly
+      - .:/app # MAGIC LINE: Code changes in VS Code update the container live
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
     depends_on:
-      - db
+      db:
+        condition: service_healthy # Wait for DB to be fully ready
     networks:
       - antigravity_network
 
-  # 3. THE MANAGEMENT TOOL (pgAdmin)
   pgadmin:
     container_name: pgadmin_ui_ml1
     image: dpage/pgadmin4
@@ -55,4 +59,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  postgres_data: # Declares the persistent volume for your SQL data

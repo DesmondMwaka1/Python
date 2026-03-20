@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Depends
-from models import User_data_model, Employee_model
+from fastapi import FastAPI, Depends, HTTPException
+from models import User_data_model, UserResponse, Employee_model, EmployeeResponse
 from config import session, engine
 import db_models
 from db_models import User_data, Employee
 from sqlalchemy.orm import Session
 from utils import hash_password
+from ml_utils import predict_salary
 
 app= FastAPI()
 
@@ -39,27 +40,49 @@ def create_user(user1: User_data_model, db: Session = Depends(get_db)): #pydanti
     db.commit()
     return {"message": "User created successfully"}
 
-@app.get("/users")
+@app.get("/users", response_model=list[UserResponse])
 def get_users(db: Session = Depends(get_db)):
     users = db.query(User_data).all()
+    if not users:
+        raise HTTPException(status_code=404, detail="Users not found")
     return users
 
 
-@app.get("/user/{id}")
+@app.get("/user/{id}", response_model=UserResponse)
 def get_user(id:int, db: Session = Depends(get_db)):
-    db_user=db.query(User_data).filter(User_data.id==id).first()
-    if db_user:
-        return db_user
-    return "User not found"
+    db_user = db.query(User_data).filter(User_data.id == id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
 
-@app.get("/employees")
+@app.post("/employee_years")
+def send_years_exp(employee: Employee_model, db: Session = Depends(get_db)):
+    # 1. Use your AI model to get the prediction
+    pred_salary = predict_salary(employee.years_experience)
+
+    pred_salary = round(pred_salary, 2)
+
+    # 2. Save to Database
+    new_employee = Employee(
+        years_experience=employee.years_experience,
+        salary=pred_salary # Saving the AI result
+    )
+    
+    db.add(new_employee)
+    db.commit()
+    db.refresh(new_employee)
+    return {"message": "Employee created successfully"}
+
+@app.get("/employees_salary", response_model=list[EmployeeResponse])
 def get_employees_data(db: Session = Depends(get_db)):
     employees = db.query(Employee).all()
+    if not employees:
+        raise HTTPException(status_code=404, detail="Employees not found")
     return employees
 
-@app.get("/employee/{id}")
+@app.get("/employee_salary/{id}", response_model=EmployeeResponse)
 def get_employee_data(id:int, db: Session = Depends(get_db)):
-    db_emp=db.query(Employee).filter(Employee.id==id).first()
-    if db_emp:
-        return db_emp
-    return "Employee not found"
+    db_emp = db.query(Employee).filter(Employee.id == id).first()
+    if not db_emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return db_emp
