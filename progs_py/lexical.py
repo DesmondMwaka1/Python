@@ -1,21 +1,17 @@
 import re
 
-# Define token types using regular expressions
-# The order matters: keywords must be checked before identifiers
+# token types using regular expressions
 TOKEN_SPECIFICATION = [
     ('KEYWORD',    r'\b(int|if|else|while|return)\b'), # Keywords
     ('IDENTIFIER', r'[a-zA-Z_][a-zA-Z0-9_]*'),         # Identifiers
-    ('NUMBER',     r'\d+'),                             # Integer constants
-    ('OPERATOR',   r'[+\-*/]'),                         # Arithmetic operators
-    ('DELIMITER',  r'[;{}]'),                           # Specific delimiters
-    ('WHITESPACE', r'\s+'),                             # Skip spaces/tabs/newlines
+    ('LITERAL',     r'\d+'),                           # Literals
+    ('OPERATOR',   r'[+\-*/]'),                         # Operators
+    ('DELIMITER',  r'[;{}]'),                           # Delimiters
+    ('WHITESPACE', r'\s+'),                             # Skip spaces
     ('MISMATCH',   r'.'),                               # Any other character
 ]
 
 def tokenize(code):
-    """
-    Scans the input string and yields tokens based on the specifications.
-    """
     # Join all patterns into one master regex with named groups
     tok_regex = '|'.join('(?P<%s>%s)' % pair for pair in TOKEN_SPECIFICATION)
     
