@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend API Connector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .json-viewer {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            overflow-x: auto;
+            min-height: 100px;
+        }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center p-4 md:p-10">
+
+    <div class="max-w-3xl w-full space-y-6">
+        <!-- Header -->
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-blue-400">Backend Bridge</h1>
+            <p class="text-gray-400 mt-2">Test your Javascript-to-Backend connection</p>
+        </header>
+
+        <!-- Configuration Card -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Target URL</label>
+                    <input id="apiUrl" type="text" placeholder="https://your-username-space.hf.space" 
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Endpoint Path</label>
+                        <input id="apiPath" type="text" placeholder="/docs or /health" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <div class="flex-shrink-0">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Method</label>
+                        <select id="apiMethod" class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="sendBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors shadow-lg flex items-center justify-center gap-2">
+                    <span id="btnText">Execute Request</span>
+                    <div id="loader" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Result Console -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                    Server Response 
+                    <span id="statusBadge" class="hidden text-xs px-2 py-1 rounded bg-green-900 text-green-300 border border-green-700"></span>
+                </h2>
+                <button onclick="clearConsole()" class="text-xs text-gray-500 hover:text-gray-300">Clear</button>
+            </div>
+            <pre id="jsonResult" class="json-viewer">// Response will appear here...</pre>
+            
+            <!-- Error Alert -->
+            <div id="errorMessage" class="hidden mt-4 p-4 bg-red-900/30 border border-red-800 rounded-lg">
+                <p class="text-red-400 text-sm font-medium">⚠️ Error Detected</p>
+                <p id="errorDetail" class="text-red-300 text-xs mt-1"></p>
+                <p class="text-gray-400 text-xs mt-2 italic">Tip: Check if CORS is enabled in your backend main.py!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiUrlInput = document.getElementById('apiUrl');
+        const apiPathInput = document.getElementById('apiPath');
+        const apiMethodSelect = document.getElementById('apiMethod');
+        const sendBtn = document.getElementById('sendBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const jsonResult = document.getElementById('jsonResult');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorDetail = document.getElementById('errorDetail');
+        const statusBadge = document.getElementById('statusBadge');
+
+        async function makeRequest() {
+            // Reset UI
+            errorMessage.classList.add('hidden');
+            statusBadge.classList.add('hidden');
+            jsonResult.textContent = "// Requesting...";
+            jsonResult.classList.add('pulse');
+            
+            const baseUrl = apiUrlInput.value.trim().replace(/\/$/, "");
+            const path = apiPathInput.value.trim().startsWith('/') ? apiPathInput.value.trim() : '/' + apiPathInput.value.trim();
+            const fullUrl = baseUrl + path;
+            const method = apiMethodSelect.value;
+
+            if (!baseUrl) {
+                showError("Please enter a Base URL.");
+                return;
+            }
+
+            // Set loading state
+            btnText.textContent = "Connecting...";
+            loader.classList.remove('hidden');
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch(fullUrl, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                // Show Success
+                statusBadge.textContent = `Status: ${response.status} ${response.statusText}`;
+                statusBadge.classList.remove('hidden');
+                
+                // Pretty print JSON
+                jsonResult.textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                showError(error.message);
+                jsonResult.textContent = "// Failed to connect.";
+            } finally {
+                // Restore Button UI
+                btnText.textContent = "Execute Request";
+                loader.classList.add('hidden');
+                sendBtn.disabled = false;
+                jsonResult.classList.remove('pulse');
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.classList.remove('hidden');
+            errorDetail.textContent = msg;
+        }
+
+        function clearConsole() {
+            jsonResult.textContent = "// Console cleared.";
+            statusBadge.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        sendBtn.addEventListener('click', makeRequest);
+
+        // Allow "Enter" to trigger request
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') makeRequest();
+        });
+    </script>
+</body>
+</html>

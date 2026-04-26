@@ -29,4 +29,4 @@ COPY . .
 # 7. Start the app with reload enabled for VS Code development
 # CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", ]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860" ]
