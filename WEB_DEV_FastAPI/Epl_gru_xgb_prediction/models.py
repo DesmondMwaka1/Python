@@ -55,6 +55,33 @@ class Prediction(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="predictions")
 
+class PredictionHistory(Base):
+    __tablename__ = "prediction_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    match_date = Column(DateTime)
+    home_team = Column(String)
+    away_team = Column(String)
+    home_team_id = Column(Integer)
+    away_team_id = Column(Integer)
+    avg_h = Column(Float)
+    avg_d = Column(Float)
+    avg_a = Column(Float)
+    h_attacking = Column(Float)
+    h_defending = Column(Float)
+    h_volatility = Column(Float)
+    h_efficiency = Column(Float)
+    a_attacking = Column(Float)
+    a_defending = Column(Float)
+    a_volatility = Column(Float)
+    a_efficiency = Column(Float)
+    prob_home = Column(Float)
+    prob_draw = Column(Float)
+    prob_away = Column(Float)
+    outcome = Column(String)
+    confidence = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

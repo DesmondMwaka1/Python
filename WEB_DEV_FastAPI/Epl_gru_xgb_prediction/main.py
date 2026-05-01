@@ -1,11 +1,11 @@
-from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Request
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Request, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, field_validator
@@ -106,6 +106,7 @@ rate_limiter = SimpleRateLimiter()
 RATE_LIMIT_RULES = {
     "/register": (10, 60),
     "/login": (5, 60),
+    "/login-json": (5, 60),
     "/run-inference": (5, 60),
     "/logout": (30, 60),
     "/predictions": (30, 60),
@@ -218,6 +219,10 @@ class UserCreate(BaseModel):
             raise ValueError(f"Registration restricted to following domains: {allowed_str}")
         return v
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -271,6 +276,11 @@ class PredictionRead(BaseModel):
     outcome: str | None = None
     confidence: float | None = None
     user_id: int | None = None
+
+    model_config = {"from_attributes": True}
+
+class PredictionHistoryRead(PredictionRead):
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -366,9 +376,21 @@ def log_system_event(level: str, source: str, message: str, db: Session = None):
 
 
 def check_ip_lockout(ip_address: str):
-    now = datetime.utcnow()
-    recent_failures = [t for t in failed_attempts[ip_address] if now - t < timedelta(minutes=LOCKOUT_DURATION_MINUTES)]
+    # Use timezone-aware UTC now
+    now = datetime.now(timezone.utc)
+    
+    # Ensure failed_attempts[ip_address] exists to avoid KeyError
+    attempts = failed_attempts.get(ip_address, [])
+    
+    # Filter recent failures
+    recent_failures = [
+        t for t in attempts 
+        if now - t < timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+    ]
+    
+    # Update the storage with the filtered list
     failed_attempts[ip_address] = recent_failures
+    
     if len(recent_failures) >= MAX_FAILED_ATTEMPTS:
         return True
     return False
@@ -409,18 +431,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         error_code="INVALID_TOKEN",
         message="Could not validate credentials"
     )
+    logger.info(f"AUTH | Attempting auth with token: {token[:20]}...")
     try:
         if is_token_blacklisted(token):
+            logger.info("AUTH | Token is blacklisted")
             raise credentials_exception
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        logger.info(f"AUTH | Decoded email: {email}")
         if email is None:
+            logger.info("AUTH | No email in token")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.info(f"AUTH | JWT decode failed: {str(e)}")
         raise credentials_exception
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
+        logger.info("AUTH | User not found in DB")
         raise credentials_exception
+    logger.info(f"AUTH | Auth successful for user: {email}")
     return user
 
 async def get_admin_user(current_user: models.User = Depends(get_current_user)):
@@ -478,6 +507,11 @@ def shutdown_event():
 
 # --- ROUTES ---
 
+@app.get("/")
+def root():
+    """Root welcome endpoint."""
+    return {"message": "Welcome to SOCCKA AI"}
+
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
     """Monitoring endpoint for uptime and service connectivity."""
@@ -526,9 +560,67 @@ def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db
     access_token = create_access_token(data={"sub": new_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
+# @app.post("/login", response_model=Token)
+# def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+#     client_ip = request.client.host
+#     if check_ip_lockout(client_ip):
+#         raise AppException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             error_code="ACCOUNT_LOCKED",
+#             message=f"Too many failed attempts. Please try again in {LOCKOUT_DURATION_MINUTES} minutes."
+#         )
+
+#     user = db.query(models.User).filter(models.User.email == form_data.username).first()
+#     if not user or not verify_password(form_data.password, user.hashed_password):
+#         failed_attempts[client_ip].append(datetime.utcnow())
+#         raise AppException(status_code=401, error_code="INVALID_CREDENTIALS", message="Incorrect email or password")
+    
+#     failed_attempts[client_ip] = []
+#     log_audit_entry(user.email, client_ip, "LOGIN_SUCCESS", db)
+#     access_token = create_access_token(data={"sub": user.email})
+#     return {"access_token": access_token, "token_type": "bearer"}
+
+
+# from fastapi import FastAPI, Depends, Request, status, Form
+# from fastapi.security import OAuth2PasswordRequestForm
+# from datetime import datetime, timezone
+# from sqlalchemy.orm import Session
+
+#1. Create the Custom Form Class
+class OAuth2EmailRequestForm:
+    """
+    This class mimics OAuth2PasswordRequestForm but accepts either
+    email or username so Swagger's OAuth2 password flow and manual
+    login both work.
+    """
+    def __init__(
+        self,
+        email: str | None = Form(None, description="The registered email address"),
+        username: str | None = Form(None, description="The registered email address"),
+        password: str = Form(...),
+        scope: str = Form(""),
+        client_id: str | None = Form(None),
+        client_secret: str | None = Form(None),
+    ):
+        self.email = email
+        self.username = username or email
+        self.password = password
+        self.scope = scope
+        self.client_id = client_id
+        self.client_secret = client_secret
+
+
+#2. Use it in your Login Endpoint
 @app.post("/login", response_model=Token)
-def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request, 
+    form_data: OAuth2EmailRequestForm = Depends(), # Use the custom class here
+    db: Session = Depends(get_db)
+):
     client_ip = request.client.host
+
+    
+    # Lockout check
     if check_ip_lockout(client_ip):
         raise AppException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -536,15 +628,70 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
             message=f"Too many failed attempts. Please try again in {LOCKOUT_DURATION_MINUTES} minutes."
         )
 
+    # Note: form_data.username may be populated from the OAuth2 password flow 'username' field,
+    # or from our custom 'email' field.
+    if not form_data.username:
+        logger.info("AUTH | Login missing username/email")
+        raise AppException(status_code=400, error_code="INVALID_REQUEST", message="Email or username is required")
+
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        failed_attempts[client_ip].append(datetime.utcnow())
-        raise AppException(status_code=401, error_code="INVALID_CREDENTIALS", message="Incorrect email or password")
     
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        # Update to Python 3.12 best practice for timezone
+        failed_attempts[client_ip].append(datetime.now(timezone.utc))
+        raise AppException(
+            status_code=401, 
+            error_code="INVALID_CREDENTIALS", 
+            message="Incorrect email or password"
+        )
+    
+    # Reset attempts on success
     failed_attempts[client_ip] = []
+    
     log_audit_entry(user.email, client_ip, "LOGIN_SUCCESS", db)
+    
+    # Generate Token
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+
+@app.post("/login-json", response_model=Token)
+def login_json(
+    credentials: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    client_ip = request.client.host
+
+    # Lockout check
+    if check_ip_lockout(client_ip):
+        raise AppException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            error_code="ACCOUNT_LOCKED",
+            message=f"Too many failed attempts. Please try again in {LOCKOUT_DURATION_MINUTES} minutes."
+        )
+
+    user = db.query(models.User).filter(models.User.email == credentials.email).first()
+
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        failed_attempts[client_ip].append(datetime.now(timezone.utc))
+        raise AppException(
+            status_code=401,
+            error_code="INVALID_CREDENTIALS",
+            message="Incorrect email or password"
+        )
+
+    # Reset attempts on success
+    failed_attempts[client_ip] = []
+
+    log_audit_entry(user.email, client_ip, "LOGIN_SUCCESS_JSON", db)
+
+    # Generate Token
+    access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 
 @app.get("/user", response_model=UserRead)
 def get_current_user_profile(current_user: models.User = Depends(get_current_user)):
@@ -603,8 +750,6 @@ def get_prediction(prediction_id: int, db: Session = Depends(get_db), current_us
     prediction = db.query(models.Prediction).filter(models.Prediction.id == prediction_id).first()
     if prediction is None:
         raise AppException(status_code=404, error_code="PREDICTION_NOT_FOUND", message="Prediction not found")
-    if prediction.user_id != current_user.id and not current_user.is_admin:
-        raise AppException(status_code=403, error_code="PERMISSION_DENIED", message="Permission denied")
     return prediction
 
 @app.get("/predictions")
@@ -621,14 +766,35 @@ def get_predictions(
         skip = 0
     
     query = db.query(models.Prediction)
-    if not current_user.is_admin:
-        query = query.filter(models.Prediction.user_id == current_user.id)
     
     total = query.count()
     results = query.offset(skip).limit(limit).all()
     
     return {
         "items": results,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@app.get("/prediction-history")
+def get_prediction_history(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get prediction history with pagination."""
+    if limit > 100:
+        limit = 100
+    if skip < 0:
+        skip = 0
+
+    total = db.query(models.PredictionHistory).count()
+    history = db.query(models.PredictionHistory).order_by(models.PredictionHistory.created_at.desc()).offset(skip).limit(limit).all()
+
+    return {
+        "items": history,
         "total": total,
         "skip": skip,
         "limit": limit
@@ -724,4 +890,3 @@ def get_system_logs(
         "skip": skip,
         "limit": limit
     }
-    return logs

@@ -243,11 +243,12 @@ def run_prediction_pipeline(db: Session):
         probs = xgb_model.predict_proba(np.hstack([static_arr, momentum]))
 
         final_preds = []
+        history_entries = []
         for i, (_, row) in enumerate(to_predict.iterrows()):
             p = probs[i]
             ms = m_scaled[i]
             
-            final_preds.append(models.Prediction(
+            prediction = models.Prediction(
                 match_date=row['Date'],
                 home_team=row['HomeTeam'],
                 away_team=row['AwayTeam'],
@@ -267,12 +268,39 @@ def run_prediction_pipeline(db: Session):
                 prob_away=round(float(p[0]), 3),
                 outcome={0: 'Away Win', 1: 'Draw', 2: 'Home Win'}[np.argmax(p)],
                 confidence=round(float(np.max(p)), 3)
+            )
+
+            history_entries.append(models.PredictionHistory(
+                match_date=prediction.match_date,
+                home_team=prediction.home_team,
+                away_team=prediction.away_team,
+                home_team_id=prediction.home_team_id,
+                away_team_id=prediction.away_team_id,
+                avg_h=prediction.avg_h,
+                avg_d=prediction.avg_d,
+                avg_a=prediction.avg_a,
+                h_attacking=prediction.h_attacking,
+                h_defending=prediction.h_defending,
+                h_volatility=prediction.h_volatility,
+                h_efficiency=prediction.h_efficiency,
+                a_attacking=prediction.a_attacking,
+                a_defending=prediction.a_defending,
+                a_volatility=prediction.a_volatility,
+                a_efficiency=prediction.a_efficiency,
+                prob_home=prediction.prob_home,
+                prob_draw=prediction.prob_draw,
+                prob_away=prediction.prob_away,
+                outcome=prediction.outcome,
+                confidence=prediction.confidence,
             ))
+
+            final_preds.append(prediction)
 
         db.query(models.Prediction).delete()
         db.add_all(final_preds)
+        db.add_all(history_entries)
         db.commit()
-        logger.info(f"Pipeline complete. {len(final_preds)} live predictions saved.")
+        logger.info(f"Pipeline complete. {len(final_preds)} live predictions saved and archived.")
 
     except Exception as e:
         db.rollback()
