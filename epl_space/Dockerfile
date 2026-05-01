@@ -1,0 +1,32 @@
+# 1. Use a lightweight Python base
+FROM python:3.12-slim
+
+# 2. Set the working directory inside the container
+WORKDIR /app
+
+# 3. Install system dependencies for Postgres (keep these minimal)
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Copy ONLY requirements first to leverage Docker cache
+COPY requirements.txt .
+
+# 5. Install Python packages (Cached unless requirements.txt changes)
+# We use the CPU-only index to keep the image size small (~500MB vs 4GB)
+RUN pip install --no-cache-dir --default-timeout=1000 \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt
+
+# Set environment variables
+ENV PORT=7860
+
+# 6. Copy the rest of your app (code, .pth, .pkl)
+# This layer changes often, but it's very fast to copy
+COPY . .
+
+# 7. Start the app with reload enabled for VS Code development
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860" ]

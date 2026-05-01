@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    container_name: postgres_db_xgb
+    image: postgres:17.2
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # This is your "Save Game" for data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - antigravity_network
+
+  web:
+    build: .
+    container_name: fastapi_app_xgb
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app # MAGIC LINE: Code changes in VS Code update the container live
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ODDS_API_KEY=${ODDS_API_KEY}
+      - FOOTBALL_DATA_API_KEY=${FOOTBALL_DATA_API_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be fully ready
+    networks:
+      - antigravity_network
+
+  pgadmin:
+    container_name: pgadmin_ui_xgb
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5051:80"
+    networks:
+      - antigravity_network
+    depends_on:
+      - db
+
+networks:
+  antigravity_network:
+    driver: bridge
+
+volumes:
+  postgres_data: # Declares the persistent volume for your SQL data

@@ -1,0 +1,30 @@
+# Authentication & Security
+python-jose[cryptography]
+python-multipart
+pydantic[email]
+
+
+# Web Framework & Server
+fastapi
+uvicorn
+
+#hashing
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# Database & ORM
+sqlalchemy
+psycopg2-binary
+
+# Data Processing (Neural Network inputs)
+requests
+numpy
+pandas
+joblib
+scikit-learn
+xgboost
+
+# Neural Network (CPU Optimized)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
