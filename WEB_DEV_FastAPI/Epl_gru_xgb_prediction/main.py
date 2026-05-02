@@ -1,6 +1,7 @@
-from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Request, Form
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Request, Form, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, text
@@ -14,10 +15,13 @@ import os
 import logging
 import threading
 import time
+import shutil
 from collections import defaultdict, deque
 from functools import wraps
 from threading import Lock
+from pathlib import Path
 from typing import Generic, TypeVar
+from uuid import uuid4
 
 # --- PAGINATION ---
 T = TypeVar('T')
@@ -54,6 +58,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EPL Prediction API | Standard Library Edition")
+
+UPLOAD_BASE = Path("uploads")
+PROFILE_PHOTO_DIR = UPLOAD_BASE / "profile_photos"
+PROFILE_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_BASE)), name="uploads")
 
 # --- CUSTOM ERROR HANDLING ---
 class AppException(HTTPException):
@@ -183,11 +192,20 @@ def scheduled_prediction_update():
     while not stop_event.is_set():
         db = models.SessionLocal()
         try:
-            from prediction_engine import run_prediction_pipeline
+            from prediction_engine import run_prediction_pipeline, create_weekly_summary_notification
+            from datetime import datetime
 
             log_system_event("INFO", "HEARTBEAT", "Starting scheduled prediction update", db)
             run_prediction_pipeline(db)
             log_system_event("INFO", "HEARTBEAT", "Scheduled prediction update completed successfully", db)
+            
+            # Check if it's time for weekly summary (every Sunday at midnight-ish)
+            now = datetime.utcnow()
+            if now.weekday() == 6 and 0 <= now.hour < 6:  # Sunday between 00:00 and 06:00
+                log_system_event("INFO", "HEARTBEAT", "Creating weekly summary notifications", db)
+                create_weekly_summary_notification(db)
+                log_system_event("INFO", "HEARTBEAT", "Weekly summary notifications sent", db)
+                
         except Exception as e:
             # Standard library replacement for Sentry: Detailed local logging
             log_system_event("ERROR", "HEARTBEAT", f"Scheduled update failed: {str(e)}", db)
@@ -209,6 +227,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str = None
+    profile_photo_url: str | None = None
 
     @field_validator('email')
     @classmethod
@@ -231,6 +250,7 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
     full_name: str | None = None
+    profile_photo_url: str | None = None
     is_admin: bool = False
 
     model_config = {"from_attributes": True}
@@ -239,6 +259,7 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
     full_name: str | None = None
+    profile_photo_url: str | None = None
     is_admin: bool | None = None
 
     @field_validator('email')
@@ -281,6 +302,34 @@ class PredictionRead(BaseModel):
 
 class PredictionHistoryRead(PredictionRead):
     created_at: datetime | None = None
+    actual_result: str | None = None
+    model_was_correct: bool | None = None
+
+    model_config = {"from_attributes": True}
+
+class HistoricalMatchRead(BaseModel):
+    id: int
+    date: datetime | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    fthg: int | None = None
+    ftag: int | None = None
+    ftr: str | None = None
+    hthg: int | None = None
+    htag: int | None = None
+    htr: str | None = None
+    hs: int | None = None
+    as_: int | None = None
+    hst: int | None = None
+    ast: int | None = None
+    hc: int | None = None
+    ac: int | None = None
+    hf: int | None = None
+    af: int | None = None
+    hy: int | None = None
+    ay: int | None = None
+    hr: int | None = None
+    ar: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -301,6 +350,41 @@ class SystemLogRead(BaseModel):
     timestamp: datetime
 
     model_config = {"from_attributes": True}
+
+class NotificationRead(BaseModel):
+    id: int
+    title: str
+    message: str
+    type: str
+    is_read: bool
+    created_at: datetime
+    data: str | None = None
+
+    model_config = {"from_attributes": True}
+
+class NotificationCreate(BaseModel):
+    user_id: int
+    title: str
+    message: str
+    type: str
+    data: str | None = None
+
+class NotificationUpdate(BaseModel):
+    is_read: bool | None = None
+
+class PredictionAccuracy(BaseModel):
+    total_predictions_analyzed: int
+    correct_predictions: int
+    overall_accuracy: float
+    home_win_accuracy: float
+    draw_accuracy: float
+    away_win_accuracy: float
+    high_confidence_accuracy: float
+    high_confidence_predictions: int
+    recent_accuracy_30_days: float
+    recent_predictions_count: int
+    last_updated: str
+    error: str | None = None
 
 # --- UTILS ---
 def hash_password(password: str):
@@ -332,6 +416,25 @@ def log_audit_entry(email: str, ip_address: str, action: str, db: Session = None
             logger.error(f"AUDIT ERROR | Failed to save audit log: {str(e)}", exc_info=True)
 
 MAX_SYSTEM_LOGS = 10000
+
+def save_profile_photo(file: UploadFile, user_id: int) -> str:
+    """Save uploaded profile photo and return the external URL path."""
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    filename = file.filename or "profile_photo"
+    extension = Path(filename).suffix.lower()
+    if extension not in allowed_extensions:
+        raise AppException(status_code=400, error_code="INVALID_FILE_TYPE", message="Profile photo must be one of: jpg, jpeg, png, gif, webp")
+
+    destination_filename = f"user_{user_id}_{uuid4().hex}{extension}"
+    destination_path = PROFILE_PHOTO_DIR / destination_filename
+
+    try:
+        with destination_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise AppException(status_code=500, error_code="UPLOAD_FAILED", message=f"Unable to save profile photo: {str(e)}")
+
+    return f"/uploads/profile_photos/{destination_filename}"
 
 def prune_system_logs(db: Session):
     """Trim oldest system log entries when the table exceeds the configured maximum."""
@@ -550,7 +653,8 @@ def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db
     new_user = models.User(
         email=user_in.email,
         hashed_password=hash_password(user_in.password),
-        full_name=user_in.full_name
+        full_name=user_in.full_name,
+        profile_photo_url=user_in.profile_photo_url
     )
     db.add(new_user)
     db.commit()
@@ -724,6 +828,9 @@ def update_user(user_id: int, user_update: UserUpdate, request: Request, db: Ses
     if user_update.full_name is not None:
         user.full_name = user_update.full_name
 
+    if user_update.profile_photo_url is not None:
+        user.profile_photo_url = user_update.profile_photo_url
+
     if user_update.is_admin is not None:
         if not current_user.is_admin:
             raise AppException(status_code=403, error_code="ADMIN_REQUIRED", message="Admin access required to change admin status")
@@ -733,6 +840,44 @@ def update_user(user_id: int, user_update: UserUpdate, request: Request, db: Ses
     db.refresh(user)
     log_audit_entry(current_user.email, request.client.host, f"UPDATE_USER_{user_id}", db)
     return user
+
+@app.post("/user/{user_id}/photo", response_model=UserRead)
+def upload_user_profile_photo(
+    user_id: int,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    assert_user_access(user_id, current_user)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise AppException(status_code=404, error_code="USER_NOT_FOUND", message="User not found")
+
+    profile_photo_url = save_profile_photo(file, user_id)
+    if user.profile_photo_url and user.profile_photo_url.startswith("/uploads/profile_photos/"):
+        try:
+            existing_path = PROFILE_PHOTO_DIR / Path(user.profile_photo_url).name
+            if existing_path.exists():
+                existing_path.unlink()
+        except Exception:
+            pass
+
+    user.profile_photo_url = profile_photo_url
+    db.commit()
+    db.refresh(user)
+    log_audit_entry(current_user.email, request.client.host if request else "unknown", f"UPLOAD_PROFILE_PHOTO_{user_id}", db)
+    return user
+
+@app.put("/user/{user_id}/photo", response_model=UserRead)
+def replace_user_profile_photo(
+    user_id: int,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return upload_user_profile_photo(user_id, file, request, db, current_user)
 
 @app.delete("/user/{user_id}")
 def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -744,6 +889,121 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), c
     db.commit()
     log_audit_entry(current_user.email, request.client.host, f"DELETE_USER_{user_id}", db)
     return {"message": "User deleted"}
+
+# --- NOTIFICATIONS ENDPOINTS ---
+
+@app.get("/notifications", response_model=list[NotificationRead])
+def get_user_notifications(
+    skip: int = 0,
+    limit: int = 20,
+    unread_only: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get current user's notifications with pagination."""
+    if limit > 100:
+        limit = 100
+    if skip < 0:
+        skip = 0
+    
+    query = db.query(models.Notification).filter(models.Notification.user_id == current_user.id)
+    if unread_only:
+        query = query.filter(models.Notification.is_read == False)
+    
+    total = query.count()
+    notifications = query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return notifications
+
+@app.post("/notifications", response_model=NotificationRead)
+def create_notification(
+    notification: NotificationCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_admin_user)
+):
+    """Create a notification (admin only)."""
+    # Verify user exists
+    user = db.query(models.User).filter(models.User.id == notification.user_id).first()
+    if not user:
+        raise AppException(status_code=404, error_code="USER_NOT_FOUND", message="Target user not found")
+    
+    new_notification = models.Notification(
+        user_id=notification.user_id,
+        title=notification.title,
+        message=notification.message,
+        type=notification.type,
+        data=notification.data
+    )
+    db.add(new_notification)
+    db.commit()
+    db.refresh(new_notification)
+    return new_notification
+
+@app.put("/notifications/{notification_id}", response_model=NotificationRead)
+def update_notification(
+    notification_id: int,
+    update_data: NotificationUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Update a notification (mark as read/unread)."""
+    notification = db.query(models.Notification).filter(
+        models.Notification.id == notification_id,
+        models.Notification.user_id == current_user.id
+    ).first()
+    if not notification:
+        raise AppException(status_code=404, error_code="NOTIFICATION_NOT_FOUND", message="Notification not found")
+    
+    if update_data.is_read is not None:
+        notification.is_read = update_data.is_read
+    
+    db.commit()
+    db.refresh(notification)
+    return notification
+
+@app.delete("/notifications/{notification_id}")
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Delete a notification."""
+    notification = db.query(models.Notification).filter(
+        models.Notification.id == notification_id,
+        models.Notification.user_id == current_user.id
+    ).first()
+    if not notification:
+        raise AppException(status_code=404, error_code="NOTIFICATION_NOT_FOUND", message="Notification not found")
+    
+    db.delete(notification)
+    db.commit()
+    return {"message": "Notification deleted"}
+
+@app.post("/notifications/broadcast")
+def broadcast_notification(
+    title: str,
+    message: str,
+    type: str = "system",
+    data: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_admin_user)
+):
+    """Broadcast notification to all users (admin only)."""
+    users = db.query(models.User).all()
+    notifications = []
+    for user in users:
+        notification = models.Notification(
+            user_id=user.id,
+            title=title,
+            message=message,
+            type=type,
+            data=data
+        )
+        notifications.append(notification)
+    
+    db.add_all(notifications)
+    db.commit()
+    return {"message": f"Broadcast sent to {len(notifications)} users"}
 
 @app.get("/prediction/{prediction_id}", response_model=PredictionRead)
 def get_prediction(prediction_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -795,6 +1055,41 @@ def get_prediction_history(
 
     return {
         "items": history,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@app.get("/prediction-accuracy", response_model=PredictionAccuracy)
+def get_prediction_accuracy(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Get comprehensive prediction accuracy statistics for the last 10 matches."""
+    from prediction_engine import get_prediction_accuracy_stats
+    return get_prediction_accuracy_stats(db)
+
+@app.post("/prediction-accuracy/refresh", response_model=PredictionAccuracy)
+def refresh_prediction_accuracy(db: Session = Depends(get_db), current_user: models.User = Depends(get_admin_user)):
+    """Manually refresh prediction accuracy by recomputing the last 10 matches (admin only)."""
+    from prediction_engine import compute_prediction_accuracy
+    return compute_prediction_accuracy(db)
+
+@app.get("/historical-matches")
+def get_historical_matches(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get historical matches with pagination."""
+    if limit > 100:
+        limit = 100
+    if skip < 0:
+        skip = 0
+
+    total = db.query(models.HistoricalMatch).count()
+    matches = db.query(models.HistoricalMatch).order_by(models.HistoricalMatch.date.desc()).offset(skip).limit(limit).all()
+
+    return {
+        "items": matches,
         "total": total,
         "skip": skip,
         "limit": limit

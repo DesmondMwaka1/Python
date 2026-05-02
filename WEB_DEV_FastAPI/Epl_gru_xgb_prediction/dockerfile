@@ -20,13 +20,11 @@ RUN pip install --no-cache-dir --default-timeout=1000 \
     -r requirements.txt
 
 # Set environment variables
-ENV PORT=7860
+ENV PORT=8000
 
 # 6. Copy the rest of your app (code, .pth, .pkl)
 # This layer changes often, but it's very fast to copy
 COPY . .
 
 # 7. Start the app with reload enabled for VS Code development
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860" ]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT --reload"]

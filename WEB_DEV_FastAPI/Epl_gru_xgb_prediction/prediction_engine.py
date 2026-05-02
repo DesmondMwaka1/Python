@@ -9,8 +9,10 @@ import io
 import logging
 import sys
 import warnings
+import json
 from datetime import datetime
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import models
 
@@ -142,8 +144,79 @@ def fetch_historical_data():
         logger.error(f"Historical Data Error: {e}")
         return None
 
+def save_historical_data(db: Session):
+    df_hist = fetch_historical_data()
+    if df_hist is None:
+        logger.warning("No historical data to save.")
+        return
+
+    # Sort by date and keep only last 25 matches
+    df_hist = df_hist.sort_values('Date').tail(25)
+    
+    if len(df_hist) == 0:
+        logger.warning("No historical data after filtering.")
+        return
+
+    # Clear existing historical data
+    db.query(models.HistoricalMatch).delete()
+    db.commit()
+
+    historical_entries = []
+    for _, row in df_hist.iterrows():
+        historical_entries.append(models.HistoricalMatch(
+            date=row['Date'],
+            home_team=row['HomeTeam'],
+            away_team=row['AwayTeam'],
+            fthg=int(row.get('FTHG', 0)),
+            ftag=int(row.get('FTAG', 0)),
+            ftr=row.get('FTR', ''),
+            hthg=int(row.get('HTHG', 0)),
+            htag=int(row.get('HTAG', 0)),
+            htr=row.get('HTR', ''),
+            hs=int(row.get('HS', 0)),
+            as_=int(row.get('AS', 0)),
+            hst=int(row.get('HST', 0)),
+            ast=int(row.get('AST', 0)),
+            hc=int(row.get('HC', 0)),
+            ac=int(row.get('AC', 0)),
+            hf=int(row.get('HF', 0)),
+            af=int(row.get('AF', 0)),
+            hy=int(row.get('HY', 0)),
+            ay=int(row.get('AY', 0)),
+            hr=int(row.get('HR', 0)),
+            ar=int(row.get('AR', 0))
+        ))
+
+    db.add_all(historical_entries)
+    db.commit()
+    logger.info(f"Saved {len(historical_entries)} last historical matches to DB.")
+
+def dedupe_prediction_history(db: Session):
+    """Remove duplicate prediction history rows and keep the latest entry per match."""
+    try:
+        db.execute(text(
+            """
+            DELETE FROM prediction_history
+            WHERE id NOT IN (
+                SELECT MAX(id)
+                FROM prediction_history
+                GROUP BY match_date, home_team, away_team
+            )
+            """
+        ))
+        db.commit()
+        logger.info("Removed duplicate prediction history rows.")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to dedupe prediction history: {e}")
+
+
 def run_prediction_pipeline(db: Session):
     try:
+        # Save historical data if not already saved
+        save_historical_data(db)
+        dedupe_prediction_history(db)
+
         if xgb is None:
             logger.error("Pipeline failure: xgboost is not installed in the environment.")
             return
@@ -244,6 +317,7 @@ def run_prediction_pipeline(db: Session):
 
         final_preds = []
         history_entries = []
+        
         for i, (_, row) in enumerate(to_predict.iterrows()):
             p = probs[i]
             ms = m_scaled[i]
@@ -270,6 +344,9 @@ def run_prediction_pipeline(db: Session):
                 confidence=round(float(np.max(p)), 3)
             )
 
+            actual_result = None
+            model_was_correct = None
+            
             history_entries.append(models.PredictionHistory(
                 match_date=prediction.match_date,
                 home_team=prediction.home_team,
@@ -292,16 +369,380 @@ def run_prediction_pipeline(db: Session):
                 prob_away=prediction.prob_away,
                 outcome=prediction.outcome,
                 confidence=prediction.confidence,
+                actual_result=actual_result,
+                model_was_correct=model_was_correct
             ))
 
             final_preds.append(prediction)
 
         db.query(models.Prediction).delete()
+        for entry in history_entries:
+            db.query(models.PredictionHistory).filter_by(
+                match_date=entry.match_date,
+                home_team=entry.home_team,
+                away_team=entry.away_team
+            ).delete()
+
         db.add_all(final_preds)
         db.add_all(history_entries)
         db.commit()
         logger.info(f"Pipeline complete. {len(final_preds)} live predictions saved and archived.")
 
+        # Create notifications for all users about new predictions
+        create_prediction_notifications(db, final_preds)
+        create_match_day_notifications(db, to_predict.to_dict('records'))
+        create_milestone_notifications(db)
+        
+        # Update prediction accuracy based on historical results
+        compute_prediction_accuracy(db)
+
     except Exception as e:
         db.rollback()
         logger.error(f"Pipeline failure: {e}")
+
+
+def create_prediction_notifications(db: Session, predictions: list):
+    """Create notifications for users about new predictions."""
+    try:
+        users = db.query(models.User).all()
+        notifications = []
+        
+        for user in users:
+            # Notification for new predictions
+            notification = models.Notification(
+                user_id=user.id,
+                title="New Match Predictions Available",
+                message=f"Predictions for {len(predictions)} upcoming EPL matches are now available! Check them out.",
+                type="prediction",
+                data=json.dumps({"prediction_count": len(predictions)})
+            )
+            notifications.append(notification)
+            
+            # If there are high-confidence predictions, notify about them
+            high_conf = [p for p in predictions if p.confidence > 0.7]
+            if high_conf:
+                notification = models.Notification(
+                    user_id=user.id,
+                    title="High Confidence Predictions",
+                    message=f"We have {len(high_conf)} predictions with over 70% confidence. Don't miss out!",
+                    type="prediction",
+                    data=json.dumps({"high_conf_count": len(high_conf)})
+                )
+                notifications.append(notification)
+        
+        db.add_all(notifications)
+        db.commit()
+        logger.info(f"Created {len(notifications)} prediction notifications for {len(users)} users.")
+        
+    except Exception as e:
+        logger.error(f"Failed to create prediction notifications: {e}")
+
+
+def create_accuracy_notification(db: Session, match_result: dict):
+    """Create notification when a prediction's accuracy is determined."""
+    try:
+        # Find users who might be interested (perhaps those who viewed the prediction)
+        # For now, create for all users or based on some criteria
+        users = db.query(models.User).all()
+        notifications = []
+        
+        correct = match_result.get('correct', False)
+        home_team = match_result.get('home_team')
+        away_team = match_result.get('away_team')
+        
+        title = "Prediction Result: " + ("Correct!" if correct else "Missed!")
+        message = f"Our prediction for {home_team} vs {away_team} was {'correct' if correct else 'incorrect'}."
+        
+        for user in users:
+            notification = models.Notification(
+                user_id=user.id,
+                title=title,
+                message=message,
+                type="accuracy",
+                data=json.dumps({
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "correct": correct
+                })
+            )
+            notifications.append(notification)
+        
+        db.add_all(notifications)
+        db.commit()
+        logger.info(f"Created accuracy notifications for match: {home_team} vs {away_team}")
+        
+    except Exception as e:
+        logger.error(f"Failed to create accuracy notification: {e}")
+
+
+def create_weekly_summary_notification(db: Session):
+    """Create weekly summary notifications for users."""
+    try:
+        # Calculate this week's stats
+        from datetime import datetime, timedelta
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        
+        total_predictions = db.query(models.PredictionHistory).filter(
+            models.PredictionHistory.created_at >= week_ago
+        ).count()
+        
+        correct_predictions = db.query(models.PredictionHistory).filter(
+            models.PredictionHistory.created_at >= week_ago,
+            models.PredictionHistory.model_was_correct == True
+        ).count()
+        
+        accuracy = (correct_predictions / total_predictions * 100) if total_predictions > 0 else 0
+        
+        users = db.query(models.User).all()
+        notifications = []
+        
+        for user in users:
+            notification = models.Notification(
+                user_id=user.id,
+                title="Weekly Prediction Summary",
+                message=f"This week: {correct_predictions}/{total_predictions} predictions correct ({accuracy:.1f}% accuracy)",
+                type="summary",
+                data=json.dumps({
+                    "total": total_predictions,
+                    "correct": correct_predictions,
+                    "accuracy": accuracy
+                })
+            )
+            notifications.append(notification)
+        
+        db.add_all(notifications)
+        db.commit()
+        logger.info(f"Created weekly summary notifications for {len(users)} users.")
+        
+    except Exception as e:
+        logger.error(f"Failed to create weekly summary notifications: {e}")
+
+
+def create_match_day_notifications(db: Session, upcoming_matches: list):
+    """Create notifications for matches happening today."""
+    try:
+        from datetime import datetime, timedelta
+        today = datetime.utcnow().date()
+        
+        today_matches = [m for m in upcoming_matches if m['Date'].date() == today]
+        if not today_matches:
+            return
+            
+        users = db.query(models.User).all()
+        notifications = []
+        
+        for user in users:
+            match_list = [f"{m['HomeTeam']} vs {m['AwayTeam']}" for m in today_matches]
+            notification = models.Notification(
+                user_id=user.id,
+                title="Match Day Alert!",
+                message=f"{len(today_matches)} EPL matches are happening today. Check our predictions!",
+                type="match",
+                data=json.dumps({
+                    "match_count": len(today_matches),
+                    "matches": match_list
+                })
+            )
+            notifications.append(notification)
+        
+        db.add_all(notifications)
+        db.commit()
+        logger.info(f"Created match day notifications for {len(today_matches)} matches.")
+        
+    except Exception as e:
+        logger.error(f"Failed to create match day notifications: {e}")
+
+
+def create_milestone_notifications(db: Session):
+    """Create notifications for prediction milestones (e.g., 100 predictions, accuracy milestones)."""
+    try:
+        total_predictions = db.query(models.PredictionHistory).count()
+        correct_predictions = db.query(models.PredictionHistory).filter(
+            models.PredictionHistory.model_was_correct == True
+        ).count()
+        
+        accuracy = (correct_predictions / total_predictions * 100) if total_predictions > 0 else 0
+        
+        users = db.query(models.User).all()
+        notifications = []
+        
+        # Milestone notifications
+        milestones = [10, 25, 50, 100, 250, 500, 1000]
+        for milestone in milestones:
+            if total_predictions == milestone:
+                for user in users:
+                    notification = models.Notification(
+                        user_id=user.id,
+                        title="Prediction Milestone Reached!",
+                        message=f"We've now made {milestone} predictions! Keep tracking our accuracy.",
+                        type="milestone",
+                        data=json.dumps({
+                            "milestone": milestone,
+                            "total_predictions": total_predictions
+                        })
+                    )
+                    notifications.append(notification)
+                break
+        
+        # Accuracy milestone
+        accuracy_milestones = [50, 60, 70, 75, 80]
+        for acc_milestone in accuracy_milestones:
+            if accuracy >= acc_milestone and accuracy < acc_milestone + 1:  # Rough check to avoid spam
+                for user in users:
+                    notification = models.Notification(
+                        user_id=user.id,
+                        title="Accuracy Milestone!",
+                        message=f"Our model has achieved {accuracy:.1f}% accuracy across all predictions!",
+                        type="milestone",
+                        data=json.dumps({
+                            "accuracy": accuracy,
+                            "total": total_predictions,
+                            "correct": correct_predictions
+                        })
+                    )
+                    notifications.append(notification)
+                break
+        
+        if notifications:
+            db.add_all(notifications)
+            db.commit()
+            logger.info(f"Created {len(notifications)} milestone notifications.")
+        
+    except Exception as e:
+        logger.error(f"Failed to create milestone notifications: {e}")
+
+
+def compute_prediction_accuracy(db: Session):
+    """Analyze the last 10 historical matches vs predictions and compute accuracy metrics."""
+    try:
+        logger.info("Starting prediction accuracy computation...")
+        
+        # Get the last 10 historical matches (most recent first)
+        historical_matches = db.query(models.HistoricalMatch).order_by(models.HistoricalMatch.date.desc()).limit(10).all()
+        logger.info(f"Found {len(historical_matches)} historical matches (last 10)")
+        
+        # Get all prediction history entries
+        predictions = db.query(models.PredictionHistory).all()
+        logger.info(f"Found {len(predictions)} prediction history entries")
+        
+        # Create lookup dictionaries for faster matching
+        hist_lookup = {}
+        for match in historical_matches:
+            key = (match.date.date(), match.home_team.lower(), match.away_team.lower())
+            hist_lookup[key] = match
+        
+        pred_lookup = {}
+        for pred in predictions:
+            key = (pred.match_date.date(), pred.home_team.lower(), pred.away_team.lower())
+            pred_lookup[key] = pred
+        
+        updated_predictions = []
+        total_checked = 0
+        correct_predictions = 0
+        home_correct = 0
+        draw_correct = 0
+        away_correct = 0
+        
+        # Match predictions with historical results for the last 10 matches
+        for pred_key, prediction in pred_lookup.items():
+            if pred_key in hist_lookup:
+                historical = hist_lookup[pred_key]
+                total_checked += 1
+                
+                # Map historical result to our format
+                actual_result = historical.ftr  # H, D, A
+                
+                # Determine if prediction was correct
+                predicted_outcome = prediction.outcome
+                was_correct = False
+                
+                if predicted_outcome == "Home Win" and actual_result == "H":
+                    was_correct = True
+                    home_correct += 1
+                elif predicted_outcome == "Draw" and actual_result == "D":
+                    was_correct = True
+                    draw_correct += 1
+                elif predicted_outcome == "Away Win" and actual_result == "A":
+                    was_correct = True
+                    away_correct += 1
+                
+                if was_correct:
+                    correct_predictions += 1
+                
+                # Update the prediction record
+                prediction.actual_result = actual_result
+                prediction.model_was_correct = was_correct
+                updated_predictions.append(prediction)
+                
+                logger.debug(f"Match {historical.home_team} vs {historical.away_team}: Predicted {predicted_outcome}, Actual {actual_result}, Correct: {was_correct}")
+        
+        # Save updates to database
+        if updated_predictions:
+            db.bulk_save_objects(updated_predictions)
+            db.commit()
+            logger.info(f"Updated {len(updated_predictions)} prediction records with actual results")
+        
+        # Calculate accuracy metrics
+        accuracy = (correct_predictions / total_checked * 100) if total_checked > 0 else 0
+        
+        # Calculate confidence-based accuracy
+        high_conf_correct = 0
+        high_conf_total = 0
+        for pred in updated_predictions:
+            if pred.confidence > 0.7:
+                high_conf_total += 1
+                if pred.model_was_correct:
+                    high_conf_correct += 1
+        
+        high_conf_accuracy = (high_conf_correct / high_conf_total * 100) if high_conf_total > 0 else 0
+        
+        # Calculate recent accuracy (last 30 days)
+        thirty_days_ago = datetime.utcnow() - pd.Timedelta(days=30)
+        recent_predictions = [p for p in updated_predictions if p.match_date >= thirty_days_ago]
+        recent_correct = sum(1 for p in recent_predictions if p.model_was_correct)
+        recent_accuracy = (recent_correct / len(recent_predictions) * 100) if recent_predictions else 0
+        
+        accuracy_stats = {
+            "total_predictions_analyzed": total_checked,
+            "correct_predictions": correct_predictions,
+            "overall_accuracy": round(accuracy, 2),
+            "home_win_accuracy": round((home_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+            "draw_accuracy": round((draw_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+            "away_win_accuracy": round((away_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+            "high_confidence_accuracy": round(high_conf_accuracy, 2),
+            "high_confidence_predictions": high_conf_total,
+            "recent_accuracy_30_days": round(recent_accuracy, 2),
+            "recent_predictions_count": len(recent_predictions),
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+        logger.info(f"Accuracy computation complete: {accuracy:.2f}% overall accuracy from last {total_checked} matches")
+        return accuracy_stats
+        
+    except Exception as e:
+        logger.error(f"Failed to compute prediction accuracy: {e}")
+        db.rollback()
+        return {
+            "error": str(e),
+            "total_predictions_analyzed": 0,
+            "correct_predictions": 0,
+            "overall_accuracy": 0.0,
+            "last_updated": datetime.utcnow().isoformat()
+        }
+
+
+def get_prediction_accuracy_stats(db: Session):
+    """Get cached or compute fresh accuracy statistics for the last 10 matches."""
+    try:
+        # Try to get from cache first (you could implement caching here)
+        # For now, always compute fresh
+        return compute_prediction_accuracy(db)
+    except Exception as e:
+        logger.error(f"Failed to get prediction accuracy stats: {e}")
+        return {
+            "error": str(e),
+            "total_predictions_analyzed": 0,
+            "correct_predictions": 0,
+            "overall_accuracy": 0.0,
+            "last_updated": datetime.utcnow().isoformat()
+        }

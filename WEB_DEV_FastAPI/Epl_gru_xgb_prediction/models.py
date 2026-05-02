@@ -13,6 +13,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
+    profile_photo_url = Column(String, nullable=True)
     is_admin = Column(Boolean, default=False)
 
     # Relationship to track which user triggered which predictions (optional)
@@ -80,7 +81,35 @@ class PredictionHistory(Base):
     prob_away = Column(Float)
     outcome = Column(String)
     confidence = Column(Float)
+    actual_result = Column(String, nullable=True)  # H, D, A or None if not yet played
+    model_was_correct = Column(Boolean, nullable=True)  # True/False if match played, None if pending
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+class HistoricalMatch(Base):
+    __tablename__ = "historical_matches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime, index=True)
+    home_team = Column(String)
+    away_team = Column(String)
+    fthg = Column(Integer)  # Full Time Home Goals
+    ftag = Column(Integer)  # Full Time Away Goals
+    ftr = Column(String)    # Full Time Result: H, D, A
+    hthg = Column(Integer)  # Half Time Home Goals
+    htag = Column(Integer)  # Half Time Away Goals
+    htr = Column(String)    # Half Time Result
+    hs = Column(Integer)    # Home Shots
+    as_ = Column(Integer)   # Away Shots (renamed to avoid keyword)
+    hst = Column(Integer)   # Home Shots on Target
+    ast = Column(Integer)   # Away Shots on Target
+    hc = Column(Integer)    # Home Corners
+    ac = Column(Integer)    # Away Corners
+    hf = Column(Integer)    # Home Fouls
+    af = Column(Integer)    # Away Fouls
+    hy = Column(Integer)    # Home Yellow Cards
+    ay = Column(Integer)    # Away Yellow Cards
+    hr = Column(Integer)    # Home Red Cards
+    ar = Column(Integer)    # Away Red Cards 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -100,6 +129,24 @@ class SystemLog(Base):
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    type = Column(String, nullable=False)  # e.g., "prediction", "match", "system", "accuracy"
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    data = Column(String)  # JSON string for additional data like match_id, prediction_id, etc.
+
+    # Relationship
+    user = relationship("User", back_populates="notifications")
+
+# Add notifications relationship to User
+User.notifications = relationship("Notification", back_populates="user")
+
 # DB Connection Setup
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
@@ -112,5 +159,8 @@ def init_db():
     # This avoids startup failure when the database was created before schema changes.
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url VARCHAR"))
         conn.execute(text("ALTER TABLE predictions ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+        conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS actual_result VARCHAR"))
+        conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS model_was_correct BOOLEAN"))
         conn.commit()
