@@ -26,6 +26,8 @@ class Prediction(Base):
     match_date = Column(DateTime)
     home_team = Column(String)
     away_team = Column(String)
+    home_team_logo = Column(String, nullable=True)
+    away_team_logo = Column(String, nullable=True)
     home_team_id = Column(Integer)
     away_team_id = Column(Integer)
     
@@ -63,6 +65,8 @@ class PredictionHistory(Base):
     match_date = Column(DateTime)
     home_team = Column(String)
     away_team = Column(String)
+    home_team_logo = Column(String, nullable=True)
+    away_team_logo = Column(String, nullable=True)
     home_team_id = Column(Integer)
     away_team_id = Column(Integer)
     avg_h = Column(Float)
@@ -92,6 +96,8 @@ class HistoricalMatch(Base):
     date = Column(DateTime, index=True)
     home_team = Column(String)
     away_team = Column(String)
+    home_team_logo = Column(String, nullable=True)
+    away_team_logo = Column(String, nullable=True)
     fthg = Column(Integer)  # Full Time Home Goals
     ftag = Column(Integer)  # Full Time Away Goals
     ftr = Column(String)    # Full Time Result: H, D, A
@@ -161,6 +167,12 @@ def init_db():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url VARCHAR"))
         conn.execute(text("ALTER TABLE predictions ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+        conn.execute(text("ALTER TABLE predictions ADD COLUMN IF NOT EXISTS home_team_logo VARCHAR"))
+        conn.execute(text("ALTER TABLE predictions ADD COLUMN IF NOT EXISTS away_team_logo VARCHAR"))
         conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS actual_result VARCHAR"))
         conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS model_was_correct BOOLEAN"))
+        conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS home_team_logo VARCHAR"))
+        conn.execute(text("ALTER TABLE prediction_history ADD COLUMN IF NOT EXISTS away_team_logo VARCHAR"))
+        conn.execute(text("ALTER TABLE historical_matches ADD COLUMN IF NOT EXISTS home_team_logo VARCHAR"))
+        conn.execute(text("ALTER TABLE historical_matches ADD COLUMN IF NOT EXISTS away_team_logo VARCHAR"))
         conn.commit()

@@ -56,8 +56,74 @@ TEAM_NAME_MAP = {
     "Wolverhampton Wanderers FC": "Wolves", "Wolverhampton Wanderers": "Wolves",
     "Leicester City FC": "Leicester", "Leicester City": "Leicester",
     "Ipswich Town FC": "Ipswich", "Ipswich Town": "Ipswich",
-    "Southampton FC": "Southampton", "Southampton": "Southampton"
+    "Southampton FC": "Southampton", "Southampton": "Southampton",
+    "Leeds United FC": "Leeds", "Leeds United": "Leeds",
+    "Sunderland AFC": "Sunderland", "Sunderland": "Sunderland",
+    "Birmingham City FC": "Birmingham", "Birmingham City": "Birmingham",
+    "Blackburn Rovers FC": "Blackburn", "Blackburn Rovers": "Blackburn",
+    "Derby County FC": "Derby", "Derby County": "Derby",
+    "Norwich City FC": "Norwich", "Norwich City": "Norwich",
+    "Sheffield United FC": "Sheffield United", "Sheffield United": "Sheffield United",
+    "Watford FC": "Watford", "Watford": "Watford",
+    "West Bromwich Albion FC": "WBA", "West Bromwich Albion": "WBA",
+    "Luton Town FC": "Luton", "Luton Town": "Luton",
+    "Burnley FC": "Burnley", "Burnley": "Burnley"
 }
+
+TEAM_LOGO_MAP = {
+    "Manchester City FC": "logos/Manchester_City.png",
+    "Manchester United FC": "logos/Manchester_United.png",
+    "Tottenham Hotspur FC": "logos/Tottenham_Hotspur.png",
+    "Arsenal FC": "logos/Arsenal.png",
+    "Liverpool FC": "logos/Liverpool.png",
+    "Chelsea FC": "logos/Chelsea.png",
+    "Aston Villa FC": "logos/Aston_Villa.png",
+    "Newcastle United FC": "logos/Newcastle_United.png",
+    "Brighton & Hove Albion FC": "logos/Brighton.png",
+    "Brentford FC": "logos/Brentford.png",
+    "West Ham United FC": "logos/West_Ham.png",
+    "Crystal Palace FC": "logos/Crystal_Palace.png",
+    "Fulham FC": "logos/Fulham.png",
+    "AFC Bournemouth": "logos/Bournemouth.png",
+    "Everton FC": "logos/Everton.png",
+    "Nottingham Forest FC": "logos/Nottingham_Forest.png",
+    "Wolverhampton Wanderers FC": "logos/Wolverhampton_Wanderers.png",
+    "Leicester City FC": "logos/Leicester_City.png",
+    "Ipswich Town FC": "logos/ipswich.png",
+    "Southampton FC": "logos/Southampton.png",
+    "Birmingham City FC": "logos/birmingham.png",
+    "Blackburn Rovers FC": "logos/Blackburn_Rovers.png",
+    "Derby County FC": "logos/Derby_County.png",
+    "Sunderland AFC": "logos/Sunderland_AFC.png",
+    "Leeds United FC": "logos/Leeds_United.png",
+    "Norwich City FC": "logos/Norwich_City.png",
+    "Sheffield United FC": "logos/Sheffield_United.png",
+    "Watford FC": "logos/Watford.png",
+    "West Bromwich Albion FC": "logos/West_brom.png",
+    "Luton Town FC": "logos/Luton_Town.png",
+    "Burnley FC": "logos/Burnley.png"
+}
+
+# Build normalized lookup so team names like "Man City" resolve correctly.
+NORMALIZED_TEAM_LOGO_MAP = {}
+for team_name, logo_path in TEAM_LOGO_MAP.items():
+    NORMALIZED_TEAM_LOGO_MAP[team_name] = logo_path
+    normalized_name = TEAM_NAME_MAP.get(team_name, team_name)
+    NORMALIZED_TEAM_LOGO_MAP[normalized_name] = logo_path
+
+
+def get_team_logo(team_name: str | None):
+    if not team_name:
+        return None
+    logo_path = NORMALIZED_TEAM_LOGO_MAP.get(team_name)
+    if not logo_path:
+        return None
+    logo_path = logo_path.replace("\\", "/")
+    if logo_path.startswith("logos/"):
+        return f"/{logo_path}"
+    if logo_path.startswith("/logos/"):
+        return logo_path
+    return f"/{logo_path}"
 
 class FootballGRU(nn.Module):
     def __init__(self, input_size=32, hidden_size=32, num_classes=3, num_layers=1):
@@ -167,6 +233,8 @@ def save_historical_data(db: Session):
             date=row['Date'],
             home_team=row['HomeTeam'],
             away_team=row['AwayTeam'],
+            home_team_logo=get_team_logo(row['HomeTeam']),
+            away_team_logo=get_team_logo(row['AwayTeam']),
             fthg=int(row.get('FTHG', 0)),
             ftag=int(row.get('FTAG', 0)),
             ftr=row.get('FTR', ''),
@@ -326,6 +394,8 @@ def run_prediction_pipeline(db: Session):
                 match_date=row['Date'],
                 home_team=row['HomeTeam'],
                 away_team=row['AwayTeam'],
+                home_team_logo=get_team_logo(row['HomeTeam']),
+                away_team_logo=get_team_logo(row['AwayTeam']),
                 home_team_id=int(row['HomeTeam_ID']),
                 away_team_id=int(row['AwayTeam_ID']),
                 avg_h=row['AvgH'], avg_d=row['AvgD'], avg_a=row['AvgA'],
@@ -351,6 +421,8 @@ def run_prediction_pipeline(db: Session):
                 match_date=prediction.match_date,
                 home_team=prediction.home_team,
                 away_team=prediction.away_team,
+                home_team_logo=prediction.home_team_logo,
+                away_team_logo=prediction.away_team_logo,
                 home_team_id=prediction.home_team_id,
                 away_team_id=prediction.away_team_id,
                 avg_h=prediction.avg_h,

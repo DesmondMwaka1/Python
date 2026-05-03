@@ -63,6 +63,7 @@ UPLOAD_BASE = Path("uploads")
 PROFILE_PHOTO_DIR = UPLOAD_BASE / "profile_photos"
 PROFILE_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_BASE)), name="uploads")
+app.mount("/logos", StaticFiles(directory=str(Path("logos"))), name="logos")
 
 # --- CUSTOM ERROR HANDLING ---
 class AppException(HTTPException):
@@ -278,6 +279,8 @@ class PredictionRead(BaseModel):
     match_date: datetime | None = None
     home_team: str | None = None
     away_team: str | None = None
+    home_team_logo: str | None = None
+    away_team_logo: str | None = None
     home_team_id: int | None = None
     away_team_id: int | None = None
     avg_h: float | None = None
@@ -312,6 +315,8 @@ class HistoricalMatchRead(BaseModel):
     date: datetime | None = None
     home_team: str | None = None
     away_team: str | None = None
+    home_team_logo: str | None = None
+    away_team_logo: str | None = None
     fthg: int | None = None
     ftag: int | None = None
     ftr: str | None = None
