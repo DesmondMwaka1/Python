@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SOCCKA AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;--bg2:#0d1120;--bg3:#111827;--bg4:#1a2236;
+  --border:#1e2d47;--border2:#263552;
+  --cyan:#00d4f0;--cyan2:#0099bb;
+  --green:#00e676;--red:#f44336;--amber:#ffb300;--purple:#9c6fe4;
+  --txt:#e2eaf8;--txt2:#8096b8;--txt3:#3d5070;
+  --disp:'Bebas Neue',sans-serif;
+  --body:'DM Sans',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --r:10px;--r2:6px;
+}
+html,body{height:100%;font-family:var(--body);background:var(--bg);color:var(--txt);overflow:hidden}
+
+/* LAYOUT */
+#shell{display:flex;height:100vh}
+#sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:width .25s}
+#sidebar.collapsed{width:60px}
+#main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+/* SIDEBAR */
+.sb-logo{padding:20px 16px 12px;display:flex;align-items:center;gap:10px}
+.sb-wordmark{font-family:var(--disp);font-size:26px;letter-spacing:2px;color:var(--cyan);white-space:nowrap}
+.sb-badge{font-size:9px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase;font-weight:600;margin-top:2px;white-space:nowrap}
+.sb-divider{height:1px;background:var(--border);margin:8px 12px}
+.sb-section{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);font-weight:600;padding:8px 16px 4px;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .sb-section{opacity:0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-radius:var(--r2);margin:1px 8px;transition:background .15s,color .15s;color:var(--txt2);font-size:13px;font-weight:500;white-space:nowrap;border:none;background:none;width:calc(100% - 16px);text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--txt)}
+.nav-item.active{background:rgba(0,212,240,.1);color:var(--cyan)}
+.nav-icon{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+.nav-label{overflow:hidden;white-space:nowrap}
+.sb-bottom{margin-top:auto;padding:12px 8px}
+.user-chip{display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--r);background:var(--bg3);border:1px solid var(--border)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#0088bb,#005588);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;flex-shrink:0}
+.user-info{overflow:hidden}
+.user-name{font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:10px;color:var(--txt3);white-space:nowrap}
+
+/* TOPBAR */
+#topbar{height:56px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.tb-title{font-family:var(--disp);font-size:22px;letter-spacing:1px;color:var(--txt);flex:1}
+.tb-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green);font-family:var(--mono)}
+.tb-status::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+.tb-btn{padding:7px 14px;border-radius:var(--r2);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--bg4);color:var(--txt2);transition:all .15s}
+.tb-btn:hover{border-color:var(--cyan2);color:var(--cyan)}
+.tb-btn.danger{border-color:rgba(244,67,54,.3);color:var(--red);background:rgba(244,67,54,.08)}
+.tb-btn.danger:hover{background:rgba(244,67,54,.15)}
+
+/* PAGE CONTENT */
+.page{display:none;padding:24px;flex:1}
+.page.active{display:block}
+
+/* AUTH WRAPPER */
+#auth-shell{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse 70% 60% at 50% 40%,#0a1830,var(--bg));display:flex;align-items:center;justify-content:center}
+.auth-panel{width:420px;background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:44px 40px;box-shadow:0 40px 80px rgba(0,0,0,.5)}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo .w{font-family:var(--disp);font-size:52px;letter-spacing:3px;color:var(--cyan);line-height:1}
+.auth-logo .s{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--txt3);margin-top:4px}
+.auth-tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:28px}
+.auth-tab{flex:1;padding:7px;text-align:center;font-size:12px;font-weight:500;cursor:pointer;border-radius:4px;color:var(--txt3);border:none;background:none;transition:all .2s}
+.auth-tab.active{background:var(--bg4);color:var(--txt);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-bottom:6px}
+.field input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:11px 14px;color:var(--txt);font-family:var(--body);font-size:13px;outline:none;transition:border-color .2s}
+.field input:focus{border-color:var(--cyan2)}
+.field input::placeholder{color:var(--txt3)}
+.btn-primary{width:100%;padding:12px;background:var(--cyan2);border:none;border-radius:var(--r2);color:#fff;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn-primary:hover{opacity:.85}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.auth-err{background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.25);border-radius:var(--r2);padding:9px 12px;font-size:12px;color:var(--red);margin-bottom:16px;display:none}
+
+/* LANDING */
+#landing{background:var(--bg);min-height:100vh;overflow-y:auto}
+.land-nav{display:flex;align-items:center;padding:20px 48px;border-bottom:1px solid var(--border)}
+.land-logo{font-family:var(--disp);font-size:28px;letter-spacing:2px;color:var(--cyan);flex:1}
+.land-nav-btns{display:flex;gap:10px}
+.land-btn-outline{padding:9px 20px;border:1px solid var(--border2);border-radius:var(--r2);background:none;color:var(--txt2);font-family:var(--body);font-size:13px;cursor:pointer;transition:all .2s}
+.land-btn-outline:hover{border-color:var(--cyan2);color:var(--cyan)}
+.land-btn-fill{padding:9px 20px;border:none;border-radius:var(--r2);background:var(--cyan2);color:#fff;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.land-btn-fill:hover{opacity:.85}
+.land-hero{max-width:880px;margin:100px auto 80px;text-align:center;padding:0 32px}
+.land-eyebrow{font-size:10px;letter-spacing:4px;text-transform:uppercase;color:var(--cyan);font-weight:600;margin-bottom:20px}
+.land-h1{font-family:var(--disp);font-size:88px;letter-spacing:3px;line-height:.95;color:var(--txt);margin-bottom:24px}
+.land-h1 span{color:var(--cyan)}
+.land-sub{font-size:16px;color:var(--txt2);line-height:1.7;max-width:520px;margin:0 auto 40px}
+.land-cta{display:flex;gap:12px;justify-content:center}
+.land-cta-main{padding:14px 36px;border:none;border-radius:var(--r2);background:var(--cyan);color:#000;font-family:var(--body);font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:opacity .2s}
+.land-cta-main:hover{opacity:.85}
+.land-cta-sec{padding:14px 36px;border:1px solid var(--border2);border-radius:var(--r2);background:none;color:var(--txt2);font-family:var(--body);font-size:14px;cursor:pointer;transition:all .2s}
+.land-cta-sec:hover{border-color:var(--cyan2);color:var(--txt)}
+.land-features{max-width:960px;margin:0 auto 100px;padding:0 32px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:28px 24px}
+.feat-icon{font-size:28px;margin-bottom:14px}
+.feat-title{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:8px}
+.feat-desc{font-size:13px;color:var(--txt2);line-height:1.6}
+.land-stats{max-width:960px;margin:0 auto 80px;padding:0 32px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.land-stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:24px;text-align:center}
+.land-stat-val{font-family:var(--disp);font-size:44px;color:var(--cyan);letter-spacing:1px}
+.land-stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;margin-top:4px}
+
+/* CARDS / GRID */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c,var(--cyan))}
+.stat-card.g::before{--c:var(--green)}
+.stat-card.r::before{--c:var(--red)}
+.stat-card.a::before{--c:var(--amber)}
+.s-lbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-bottom:8px}
+.s-val{font-family:var(--disp);font-size:36px;color:var(--txt);letter-spacing:1px;line-height:1}
+.s-sub{font-size:11px;color:var(--txt3);margin-top:4px}
+
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.card-hd{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+
+/* PREDICTION CARDS */
+.pred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.pred-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .2s}
+.pred-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.pc-head{padding:12px 16px;background:var(--bg4);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.pc-date{font-family:var(--mono);font-size:10px;color:var(--txt3)}
+.pc-badge{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.pc-badge.h{background:rgba(0,212,240,.12);color:var(--cyan);border:1px solid rgba(0,212,240,.2)}
+.pc-badge.d{background:rgba(255,179,0,.1);color:var(--amber);border:1px solid rgba(255,179,0,.2)}
+.pc-badge.a{background:rgba(244,67,54,.1);color:var(--red);border:1px solid rgba(244,67,54,.2)}
+.pc-teams{display:flex;align-items:center;justify-content:space-between;padding:14px 16px}
+.pc-team{text-align:center;flex:1}
+.pc-logo{width:34px;height:34px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--txt2);margin:0 auto 6px;overflow:hidden}
+.pc-logo img{width:100%;height:100%;object-fit:contain}
+.pc-tname{font-size:12px;font-weight:600;color:var(--txt);line-height:1.2}
+.pc-vs{font-family:var(--disp);font-size:20px;color:var(--txt3);flex-shrink:0;padding:0 8px}
+.pc-bars{padding:0 16px 12px;display:flex;flex-direction:column;gap:6px}
+.pbar-row{display:flex;align-items:center;gap:8px}
+.pbar-lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);width:36px}
+.pbar-track{flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden}
+.pbar-fill{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.22,1,.36,1)}
+.pbar-fill.h{background:var(--cyan)}
+.pbar-fill.d{background:var(--amber)}
+.pbar-fill.a{background:var(--red)}
+.pbar-pct{font-family:var(--mono);font-size:10px;width:32px;text-align:right}
+.pbar-pct.h{color:var(--cyan)}.pbar-pct.d{color:var(--amber)}.pbar-pct.a{color:var(--red)}
+.pc-foot{padding:10px 16px;border-top:1px solid var(--border);background:var(--bg2);display:flex;justify-content:space-between;align-items:center}
+.pc-odds{display:flex;gap:10px}
+.pc-odd{font-family:var(--mono);font-size:10px;color:var(--txt3)}
+.pc-odd span{color:var(--txt2)}
+.pc-conf{font-family:var(--mono);font-size:10px;color:var(--txt3)}
+.pc-conf span{color:var(--green)}
+
+/* RESULT INDICATOR */
+.res-dot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+.res-dot.ok{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.res-dot.no{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.25)}
+
+/* DETAIL PAGE */
+.detail-header{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:16px}
+.detail-teams{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.dt-team{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1}
+.dt-logo{width:56px;height:56px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--txt2);overflow:hidden}
+.dt-logo img{width:100%;height:100%;object-fit:contain}
+.dt-name{font-family:var(--disp);font-size:22px;letter-spacing:1px;color:var(--txt)}
+.dt-vs{font-family:var(--disp);font-size:32px;color:var(--txt3);padding:0 16px}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);font-weight:600;text-align:left;padding:0 12px 10px;white-space:nowrap}
+.tbl td{padding:12px;font-size:12px;color:var(--txt2);border-bottom:1px solid rgba(30,45,71,.4)}
+.tbl tr:hover td{background:rgba(255,255,255,.015)}
+.tbl .txt{color:var(--txt);font-weight:500}
+.tbl .mono{font-family:var(--mono);font-size:11px}
+.badge{display:inline-flex;padding:2px 9px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge.hw{background:rgba(0,212,240,.1);color:var(--cyan)}
+.badge.dr{background:rgba(255,179,0,.1);color:var(--amber)}
+.badge.aw{background:rgba(244,67,54,.1);color:var(--red)}
+.badge.ok{background:rgba(0,230,118,.1);color:var(--green)}
+.badge.no{background:rgba(244,67,54,.1);color:var(--red)}
+.badge.pend{background:rgba(61,80,112,.2);color:var(--txt3)}
+.badge.admin{background:rgba(156,111,228,.15);color:var(--purple)}
+
+/* ADMIN */
+.admin-tabs{display:flex;gap:2px;background:var(--bg4);border-radius:var(--r2);padding:3px;margin-bottom:20px;width:fit-content}
+.admin-tab{padding:7px 16px;font-size:12px;font-weight:500;cursor:pointer;border-radius:4px;color:var(--txt3);border:none;background:none;transition:all .2s}
+.admin-tab.active{background:var(--bg3);color:var(--txt);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.admin-section{display:none}
+.admin-section.active{display:block}
+
+/* LOADER */
+.loader{display:flex;align-items:center;justify-content:center;padding:48px;gap:6px}
+.ld{width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:ldp 1.2s infinite ease-in-out}
+.ld:nth-child(2){animation-delay:.2s}.ld:nth-child(3){animation-delay:.4s}
+@keyframes ldp{0%,80%,100%{transform:scale(.5);opacity:.2}40%{transform:scale(1);opacity:1}}
+
+/* MISC */
+.empty{text-align:center;padding:60px;color:var(--txt3);font-size:13px}
+.section-sep{height:1px;background:var(--border);margin:20px 0}
+.tag{display:inline-flex;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:9px;background:rgba(0,212,240,.08);color:var(--cyan2);border:1px solid rgba(0,212,240,.12)}
+.page-header{margin-bottom:20px}
+.page-header h2{font-family:var(--disp);font-size:36px;letter-spacing:1px;color:var(--txt);margin-bottom:4px}
+.page-header p{font-size:13px;color:var(--txt2)}
+.pag{display:flex;align-items:center;gap:8px;margin-top:20px;justify-content:center}
+.pag-btn{padding:7px 14px;font-size:12px;background:var(--bg4);border:1px solid var(--border);color:var(--txt2);border-radius:var(--r2);cursor:pointer;transition:all .15s}
+.pag-btn:hover:not([disabled]){border-color:var(--cyan2);color:var(--cyan)}
+.pag-btn[disabled]{opacity:.35;cursor:not-allowed}
+.pag-info{font-family:var(--mono);font-size:10px;color:var(--txt3);padding:0 6px}
+</style>
+</head>
+<body>
+
+<!-- LANDING PAGE -->
+<div id="landing">
+  <nav class="land-nav">
+    <div class="land-logo">SOCCKA</div>
+    <div class="land-nav-btns">
+      <button class="land-btn-outline" onclick="showAuth('login')">Sign In</button>
+      <button class="land-btn-fill" onclick="showAuth('register')">Get Started</button>
+    </div>
+  </nav>
+  <div class="land-hero">
+    <div class="land-eyebrow">EPL Prediction Engine</div>
+    <div class="land-h1">PREDICT<br/><span>THE PITCH</span></div>
+    <div class="land-sub">GRU + XGBoost sequential stacking delivers calibrated probability distributions for every Premier League fixture.</div>
+    <div class="land-cta">
+      <button class="land-cta-main" onclick="showAuth('register')">Start Free →</button>
+      <button class="land-cta-sec" onclick="showAuth('login')">Sign In</button>
+    </div>
+  </div>
+  <div class="land-stats">
+    <div class="land-stat"><div class="land-stat-val">6</div><div class="land-stat-lbl">Seasons Trained</div></div>
+    <div class="land-stat"><div class="land-stat-val">2,209</div><div class="land-stat-lbl">Matches Analyzed</div></div>
+    <div class="land-stat"><div class="land-stat-val">GRU</div><div class="land-stat-lbl">Temporal Model</div></div>
+    <div class="land-stat"><div class="land-stat-val">XGB</div><div class="land-stat-lbl">Stacking Layer</div></div>
+  </div>
+  <div class="land-features">
+    <div class="feat-card">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-title">Sequential Stacking</div>
+      <div class="feat-desc">GRU encodes team form sequences into temporal embeddings. XGBoost fuses them with market odds for final calibrated probabilities.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📊</div>
+      <div class="feat-title">Rich Analytics</div>
+      <div class="feat-desc">Per-match attacking, defending, volatility and efficiency metrics visualised with interactive charts and radar plots.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🎯</div>
+      <div class="feat-title">Calibrated Probabilities</div>
+      <div class="feat-desc">Outputs P(Home Win), P(Draw), P(Away Win) summing to 1.0 — not just a label, but a full probability distribution.</div>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH -->
+<div id="auth-shell" style="display:none">
+  <div class="auth-panel">
+    <div class="auth-logo"><div class="w">SOCCKA</div><div class="s">EPL Prediction Engine</div></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div id="auth-err" class="auth-err"></div>
+    <div id="form-login">
+      <div class="field"><label>Email</label><input type="email" id="li-email" placeholder="you@example.com"/></div>
+      <div class="field"><label>Password</label><input type="password" id="li-pass" placeholder="••••••••"/></div>
+      <button class="btn-primary" id="li-btn" onclick="doLogin()">Sign In</button>
+    </div>
+    <div id="form-register" style="display:none">
+      <div class="field"><label>Full Name</label><input type="text" id="rg-name" placeholder="Your name"/></div>
+      <div class="field"><label>Email</label><input type="email" id="rg-email" placeholder="you@example.com"/></div>
+      <div class="field"><label>Password</label><input type="password" id="rg-pass" placeholder="Min. 8 characters"/></div>
+      <button class="btn-primary" id="rg-btn" onclick="doRegister()">Create Account</button>
+    </div>
+    <button style="width:100%;margin-top:14px;padding:9px;background:none;border:none;color:var(--txt3);font-family:var(--body);font-size:12px;cursor:pointer" onclick="hidePanels()">← Back to home</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app-shell" style="display:none">
+  <div id="shell">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="sb-logo">
+        <div>
+          <div class="sb-wordmark">SOCCKA</div>
+          <div class="sb-badge">EPL AI</div>
+        </div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-section">Main</div>
+      <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
+        <span class="nav-icon">◈</span><span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" data-page="predictions" onclick="navTo('predictions')">
+        <span class="nav-icon">⚽</span><span class="nav-label">Predictions</span>
+      </button>
+      <button class="nav-item" data-page="history" onclick="navTo('history')">
+        <span class="nav-icon">◷</span><span class="nav-label">History</span>
+      </button>
+      <div class="sb-divider"></div>
+      <div class="sb-section">Account</div>
+      <button class="nav-item" data-page="profile" onclick="navTo('profile')">
+        <span class="nav-icon">◎</span><span class="nav-label">Profile</span>
+      </button>
+      <div id="admin-nav" style="display:none">
+        <div class="sb-section">Admin</div>
+        <button class="nav-item" data-page="admin" onclick="navTo('admin')">
+          <span class="nav-icon">⚙</span><span class="nav-label">Admin Panel</span>
+        </button>
+      </div>
+      <div class="sb-bottom">
+        <div class="user-chip">
+          <div class="avatar" id="sb-avatar">U</div>
+          <div class="user-info">
+            <div class="user-name" id="sb-name">User</div>
+            <div class="user-role" id="sb-role">Analyst</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="main">
+      <div id="topbar">
+        <div class="tb-title" id="tb-title">Dashboard</div>
+        <div class="tb-status" id="tb-status">LIVE</div>
+        <button class="tb-btn" onclick="refreshCurrent()">↻ Refresh</button>
+        <button class="tb-btn danger" onclick="doLogout()">Sign Out</button>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <h2>MATCH INTELLIGENCE</h2>
+          <p>Upcoming EPL fixture predictions — updated every matchday</p>
+        </div>
+        <div class="stat-row" id="dash-stats">
+          <div class="stat-card"><div class="s-lbl">Total Predictions</div><div class="s-val" id="d-total">—</div><div class="s-sub">all time</div></div>
+          <div class="stat-card g"><div class="s-lbl">Overall Accuracy</div><div class="s-val" style="color:var(--green)" id="d-acc">—</div><div class="s-sub">correct</div></div>
+          <div class="stat-card"><div class="s-lbl">Recent (30d)</div><div class="s-val" style="color:var(--cyan)" id="d-rec">—</div><div class="s-sub" id="d-rec-sub">predictions</div></div>
+          <div class="stat-card a"><div class="s-lbl">Model</div><div class="s-val" style="color:var(--amber)" id="d-model">GRU+XGB</div><div class="s-sub" id="d-model-sub">sequential stack</div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-hd">Accuracy by Outcome</div>
+            <div id="dash-class-acc"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+          </div>
+          <div class="card">
+            <div class="card-hd">Upcoming Fixtures</div>
+            <div id="dash-upcoming"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">Latest Predictions <span class="tag">live</span></div>
+          <div id="dash-latest" class="pred-grid"></div>
+        </div>
+      </div>
+
+      <!-- PREDICTIONS -->
+      <div class="page" id="page-predictions">
+        <div class="page-header">
+          <h2>UPCOMING FIXTURES</h2>
+          <p>Pre-match probability distributions for scheduled EPL matches</p>
+        </div>
+        <div id="pred-grid" class="pred-grid"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+        <div class="pag" id="pred-pag"></div>
+      </div>
+
+      <!-- PREDICTION DETAIL -->
+      <div class="page" id="page-detail">
+        <button onclick="navBack()" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--txt2);font-family:var(--body);font-size:13px;cursor:pointer;margin-bottom:16px;padding:0">← Back</button>
+        <div id="detail-content"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="page" id="page-history">
+        <div class="page-header">
+          <h2>PREDICTION HISTORY</h2>
+          <p>Past predictions with actuals and model correctness</p>
+        </div>
+        <div class="card">
+          <div class="card-hd">All Records <span id="hist-count" class="tag"></span></div>
+          <div id="hist-body"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+        </div>
+        <div class="pag" id="hist-pag"></div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="page" id="page-profile">
+        <div class="page-header"><h2>MY PROFILE</h2><p>Account information and settings</p></div>
+        <div class="two-col">
+          <div class="card" style="text-align:center;padding:36px">
+            <div id="prof-avatar" class="avatar" style="width:72px;height:72px;font-size:24px;margin:0 auto 14px">U</div>
+            <div style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:4px" id="prof-name">—</div>
+            <div style="font-size:13px;color:var(--txt3);margin-bottom:16px" id="prof-email">—</div>
+            <div id="prof-admin-badge"></div>
+          </div>
+          <div class="card">
+            <div class="card-hd">Account Details</div>
+            <div id="prof-details"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN -->
+      <div class="page" id="page-admin">
+        <div class="page-header"><h2>ADMIN PANEL</h2><p>User management, system monitoring, and inference control</p></div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" onclick="adminTab('users')">Users</button>
+          <button class="admin-tab" onclick="adminTab('system')">System</button>
+          <button class="admin-tab" onclick="adminTab('logs')">Logs</button>
+          <button class="admin-tab" onclick="adminTab('inference')">Inference</button>
+        </div>
+        <div class="admin-section active" id="asec-users">
+          <div class="card">
+            <div class="card-hd">All Users</div>
+            <div id="admin-users"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div>
+          </div>
+        </div>
+        <div class="admin-section" id="asec-system">
+          <div class="stat-row" id="sys-stats">
+            <div class="stat-card"><div class="s-lbl">Database</div><div class="s-val" id="sys-db" style="font-size:22px">—</div></div>
+            <div class="stat-card"><div class="s-lbl">Scheduler</div><div class="s-val" id="sys-sched" style="font-size:22px">—</div></div>
+            <div class="stat-card"><div class="s-lbl">Model Files</div><div class="s-val" id="sys-model" style="font-size:22px">—</div></div>
+            <div class="stat-card"><div class="s-lbl">API Status</div><div class="s-val" id="sys-api" style="font-size:22px;color:var(--green)">—</div></div>
+          </div>
+          <div class="card"><div class="card-hd">System Logs</div><div id="sys-logs"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div></div>
+        </div>
+        <div class="admin-section" id="asec-logs">
+          <div class="card"><div class="card-hd">Audit Logs</div><div id="audit-logs"><div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div></div></div>
+        </div>
+        <div class="admin-section" id="asec-inference">
+          <div class="two-col">
+            <div class="card">
+              <div class="card-hd">Trigger Inference</div>
+              <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:20px">Manually run the GRU + XGBoost pipeline against the latest fixture data. This generates fresh predictions for all upcoming EPL matches.</p>
+              <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:20px;font-family:var(--mono);font-size:11px;color:var(--txt3)">
+                POST /run-inference<br/>
+                <span style="color:var(--txt2)">Triggers full model pipeline</span>
+              </div>
+              <button id="infer-btn" onclick="triggerInference()" style="padding:12px 28px;background:var(--cyan2);border:none;border-radius:var(--r2);color:#fff;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s">
+                ▶ Run Inference
+              </button>
+              <div id="infer-result" style="margin-top:14px;font-size:12px;display:none"></div>
+            </div>
+            <div class="card">
+              <div class="card-hd">Accuracy Refresh</div>
+              <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:20px">Recompute prediction accuracy statistics from the last 10 resolved matches.</p>
+              <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:20px;font-family:var(--mono);font-size:11px;color:var(--txt3)">
+                POST /prediction-accuracy/refresh<br/>
+                <span style="color:var(--txt2)">Recalculates all metrics</span>
+              </div>
+              <button onclick="refreshAccuracy()" style="padding:12px 28px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--r2);color:var(--txt2);font-family:var(--body);font-size:13px;cursor:pointer;transition:all .15s">
+                ↻ Refresh Accuracy
+              </button>
+              <div id="acc-result" style="margin-top:14px;font-size:12px;display:none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /shell -->
+</div><!-- /app-shell -->
+
+<script>
+const API='https://elliott888-epl-model.hf.space';
+let TOKEN=localStorage.getItem('sk_tok')||null;
+let ME=null;
+let predPage=0,histPage=0;
+const LIMIT=12;
+let prevPage='dashboard';
+let charts={};
+
+/* ── API ── */
+async function api(path,opts={}){
+  const h={'Content-Type':'application/json'};
+  if(TOKEN)h['Authorization']='Bearer '+TOKEN;
+  const r=await fetch(API+path,{headers:h,...opts});
+  if(r.status===401){doLogout();throw new Error('Unauth');}
+  return r;
+}
+function fmt(d){
+  if(!d)return'—';
+  const dt=new Date(d);
+  return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+' '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function initials(n){return n?n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2):'?';}
+function badgeClass(o){
+  if(!o)return'pend';
+  const l=o.toLowerCase();
+  if(l.includes('home'))return'hw';
+  if(l.includes('draw'))return'dr';
+  return'aw';
+}
+function badgeLabel(o){
+  if(!o)return'Pending';
+  const l=o.toLowerCase();
+  if(l.includes('home'))return'Home Win';
+  if(l.includes('draw'))return'Draw';
+  return'Away Win';
+}
+function logoHTML(url,name,sz=34){
+  const ini=initials(name);
+  if(url)return`<img src="${API}${url}" alt="${name}" style="width:100%;height:100%;object-fit:contain" onerror="this.parentNode.textContent='${ini}'"/>`;
+  return ini;
+}
+
+/* ── ROUTING ── */
+function hidePanels(){
+  document.getElementById('landing').style.display='block';
+  document.getElementById('auth-shell').style.display='none';
+  document.getElementById('app-shell').style.display='none';
+}
+function showAuth(tab){
+  document.getElementById('landing').style.display='none';
+  document.getElementById('auth-shell').style.display='flex';
+  switchAuthTab(tab);
+}
+function switchAuthTab(t){
+  document.getElementById('form-login').style.display=t==='login'?'block':'none';
+  document.getElementById('form-register').style.display=t==='register'?'block':'none';
+  document.getElementById('tab-login').classList.toggle('active',t==='login');
+  document.getElementById('tab-register').classList.toggle('active',t==='register');
+  document.getElementById('auth-err').style.display='none';
+}
+function showAuthErr(m){const e=document.getElementById('auth-err');e.textContent=m;e.style.display='block';}
+
+function navTo(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelector('[data-page="'+name+'"]')?.classList.add('active');
+  const titles={dashboard:'Dashboard',predictions:'Predictions',detail:'Match Detail',history:'History',profile:'Profile',admin:'Admin Panel'};
+  document.getElementById('tb-title').textContent=titles[name]||name;
+  if(name!=='detail')prevPage=name;
+  if(name==='predictions')loadPredictions();
+  if(name==='history')loadHistory();
+  if(name==='profile')loadProfile();
+  if(name==='admin'){loadAdminUsers();loadSystemHealth();}
+}
+function navBack(){navTo(prevPage);}
+
+/* ── AUTH ── */
+async function doLogin(){
+  const e=document.getElementById('li-email').value.trim();
+  const p=document.getElementById('li-pass').value;
+  if(!e||!p)return showAuthErr('Please fill all fields.');
+  const btn=document.getElementById('li-btn');
+  btn.disabled=true;btn.textContent='Signing in…';
+  try{
+    const fd=new URLSearchParams();
+    fd.append('email',e);fd.append('username',e);fd.append('password',p);
+    const r=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd.toString()});
+    if(!r.ok){const j=await r.json();throw new Error(j.detail?.[0]?.msg||'Invalid credentials');}
+    const d=await r.json();
+    TOKEN=d.access_token;localStorage.setItem('sk_tok',TOKEN);
+    await bootApp();
+  }catch(err){showAuthErr(err.message);}
+  finally{btn.disabled=false;btn.textContent='Sign In';}
+}
+async function doRegister(){
+  const name=document.getElementById('rg-name').value.trim();
+  const e=document.getElementById('rg-email').value.trim();
+  const p=document.getElementById('rg-pass').value;
+  if(!name||!e||!p)return showAuthErr('Please fill all fields.');
+  const btn=document.getElementById('rg-btn');
+  btn.disabled=true;btn.textContent='Creating…';
+  try{
+    const r=await fetch(API+'/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p,full_name:name})});
+    if(!r.ok){const j=await r.json();throw new Error(j.detail?.[0]?.msg||'Registration failed');}
+    const d=await r.json();TOKEN=d.access_token;localStorage.setItem('sk_tok',TOKEN);
+    await bootApp();
+  }catch(err){showAuthErr(err.message);}
+  finally{btn.disabled=false;btn.textContent='Create Account';}
+}
+function doLogout(){
+  TOKEN=null;ME=null;localStorage.removeItem('sk_tok');
+  document.getElementById('app-shell').style.display='none';
+  document.getElementById('landing').style.display='block';
+}
+
+/* ── BOOT ── */
+async function bootApp(){
+  document.getElementById('auth-shell').style.display='none';
+  document.getElementById('landing').style.display='none';
+  document.getElementById('app-shell').style.display='block';
+  try{
+    const r=await api('/user');
+    if(r.ok){
+      ME=await r.json();
+      const ini=initials(ME.full_name||ME.email);
+      document.getElementById('sb-avatar').textContent=ini;
+      document.getElementById('sb-name').textContent=(ME.full_name||ME.email).split(' ')[0];
+      document.getElementById('sb-role').textContent=ME.is_admin?'Administrator':'Analyst';
+      if(ME.is_admin)document.getElementById('admin-nav').style.display='block';
+    }
+  }catch(e){}
+  navTo('dashboard');
+  loadDashboard();
+}
+
+/* ── DASHBOARD ── */
+async function loadDashboard(){
+  try{
+    const r=await api('/prediction-accuracy');
+    if(r.ok){
+      const d=await r.json();
+      document.getElementById('d-total').textContent=d.total_predictions_analyzed||0;
+      document.getElementById('d-acc').textContent=(d.overall_accuracy||0)+'%';
+      document.getElementById('d-rec').textContent=(d.recent_accuracy_30_days||0)+'%';
+      document.getElementById('d-rec-sub').textContent=(d.recent_predictions_count||0)+' predictions';
+      renderClassAcc(d);
+    }
+  }catch(e){}
+  try{
+    const r=await api('/predictions?skip=0&limit=6');
+    if(r.ok){
+      const txt=await r.text();let items=[];
+      try{const j=JSON.parse(txt);items=Array.isArray(j)?j:(j.items||[]);}catch(e){}
+      renderUpcoming(items);
+      renderPredCards(items.slice(0,6),'dash-latest',false);
+      setTimeout(animateBars,60);
+    }
+  }catch(e){}
+  try{
+    const r=await fetch(API+'/health');
+    if(r.ok){const h=await r.json();document.getElementById('tb-status').textContent=h.status==='healthy'?'LIVE':'DOWN';}
+  }catch(e){}
+}
+
+function renderClassAcc(d){
+  const el=document.getElementById('dash-class-acc');
+  el.innerHTML=[
+    {l:'Home Win',v:d.home_win_accuracy||0,cls:'h'},
+    {l:'Draw',v:d.draw_accuracy||0,cls:'d'},
+    {l:'Away Win',v:d.away_win_accuracy||0,cls:'a'},
+  ].map(r=>`
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:12px;font-weight:500;color:var(--txt)">${r.l}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:${r.cls==='h'?'var(--cyan)':r.cls==='d'?'var(--amber)':'var(--red)'}">${r.v}%</span>
+      </div>
+      <div class="pbar-track" style="height:7px"><div class="pbar-fill ${r.cls}" style="width:${r.v}%"></div></div>
+    </div>`).join('');
+}
+
+function renderUpcoming(items){
+  const el=document.getElementById('dash-upcoming');
+  if(!items.length){el.innerHTML='<div class="empty">No upcoming fixtures</div>';return;}
+  el.innerHTML=items.slice(0,5).map(p=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">
+      <span style="font-size:12px;font-weight:600;color:var(--txt)">${p.home_team} <span style="color:var(--txt3);font-weight:400">vs</span> ${p.away_team}</span>
+      <div style="display:flex;gap:6px">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--cyan)">${Math.round((p.prob_home||0)*100)}%</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--amber)">${Math.round((p.prob_draw||0)*100)}%</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--red)">${Math.round((p.prob_away||0)*100)}%</span>
+      </div>
+    </div>`).join('');
+}
+
+/* ── PREDICTION CARDS ── */
+function renderPredCards(items,target,showPag){
+  const el=document.getElementById(target);
+  if(!items.length){el.innerHTML='<div class="empty">No predictions available</div>';return;}
+  el.innerHTML=items.map(buildCard).join('');
+  setTimeout(animateBars,60);
+}
+
+function buildCard(p){
+  const pH=Math.round((p.prob_home||0)*100);
+  const pD=Math.round((p.prob_draw||0)*100);
+  const pA=Math.round((p.prob_away||0)*100);
+  const bc=badgeClass(p.outcome);
+  const resDot=p.model_was_correct===true?'<div class="res-dot ok" style="position:absolute;top:10px;right:10px">✓</div>':
+    p.model_was_correct===false?'<div class="res-dot no" style="position:absolute;top:10px;right:10px">✕</div>':'';
+  return`<div class="pred-card" onclick="showDetail(${p.id})" style="position:relative">
+    ${resDot}
+    <div class="pc-head">
+      <span class="pc-date">${fmt(p.match_date)}</span>
+      <span class="pc-badge ${bc}">${badgeLabel(p.outcome)}</span>
+    </div>
+    <div class="pc-teams">
+      <div class="pc-team">
+        <div class="pc-logo">${logoHTML(p.home_team_logo,p.home_team)}</div>
+        <div class="pc-tname">${p.home_team||'—'}</div>
+      </div>
+      <div class="pc-vs">VS</div>
+      <div class="pc-team">
+        <div class="pc-logo">${logoHTML(p.away_team_logo,p.away_team)}</div>
+        <div class="pc-tname">${p.away_team||'—'}</div>
+      </div>
+    </div>
+    <div class="pc-bars">
+      <div class="pbar-row"><span class="pbar-lbl">Home</span><div class="pbar-track"><div class="pbar-fill h" style="width:0" data-w="${pH}"></div></div><span class="pbar-pct h">${pH}%</span></div>
+      <div class="pbar-row"><span class="pbar-lbl">Draw</span><div class="pbar-track"><div class="pbar-fill d" style="width:0" data-w="${pD}"></div></div><span class="pbar-pct d">${pD}%</span></div>
+      <div class="pbar-row"><span class="pbar-lbl">Away</span><div class="pbar-track"><div class="pbar-fill a" style="width:0" data-w="${pA}"></div></div><span class="pbar-pct a">${pA}%</span></div>
+    </div>
+    <div class="pc-foot">
+      <div class="pc-odds">
+        <span class="pc-odd">H <span>${p.avg_h||'—'}</span></span>
+        <span class="pc-odd">D <span>${p.avg_d||'—'}</span></span>
+        <span class="pc-odd">A <span>${p.avg_a||'—'}</span></span>
+      </div>
+      <span class="pc-conf">Conf: <span>${Math.round((p.confidence||0)*100)}%</span></span>
+    </div>
+  </div>`;
+}
+
+function animateBars(){
+  document.querySelectorAll('.pbar-fill[data-w]').forEach(b=>{
+    b.style.width=b.dataset.w+'%';
+  });
+}
+
+/* ── PREDICTIONS PAGE ── */
+async function loadPredictions(){
+  document.getElementById('pred-grid').innerHTML='<div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  try{
+    const r=await api(`/predictions?skip=${predPage*LIMIT}&limit=${LIMIT}`);
+    if(!r.ok)throw new Error();
+    const txt=await r.text();let items=[];
+    try{const j=JSON.parse(txt);items=Array.isArray(j)?j:(j.items||[]);}catch(e){}
+    renderPredCards(items,'pred-grid',true);
+    renderPag('pred-pag',predPage,items.length,()=>{predPage--;loadPredictions();},()=>{predPage++;loadPredictions();});
+  }catch(e){document.getElementById('pred-grid').innerHTML='<div class="empty">No predictions found</div>';}
+}
+
+/* ── DETAIL PAGE ── */
+async function showDetail(id){
+  navTo('detail');
+  document.getElementById('detail-content').innerHTML='<div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  try{
+    const r=await api('/prediction/'+id);
+    if(!r.ok)throw new Error();
+    const p=await r.json();
+    renderDetail(p);
+  }catch(e){document.getElementById('detail-content').innerHTML='<div class="empty">Failed to load prediction</div>';}
+}
+
+function renderDetail(p){
+  const pH=Math.round((p.prob_home||0)*100);
+  const pD=Math.round((p.prob_draw||0)*100);
+  const pA=Math.round((p.prob_away||0)*100);
+  const bc=badgeClass(p.outcome);
+  document.getElementById('detail-content').innerHTML=`
+    <div class="detail-header">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--txt3)">${fmt(p.match_date)}</span>
+        <span class="pc-badge ${bc}" style="font-size:10px">${badgeLabel(p.outcome)}</span>
+      </div>
+      <div class="detail-teams">
+        <div class="dt-team">
+          <div class="dt-logo" style="width:56px;height:56px">${logoHTML(p.home_team_logo,p.home_team)}</div>
+          <div class="dt-name">${p.home_team||'—'}</div>
+          <span style="font-size:11px;color:var(--txt3)">HOME</span>
+        </div>
+        <div class="dt-vs">VS</div>
+        <div class="dt-team">
+          <div class="dt-logo" style="width:56px;height:56px">${logoHTML(p.away_team_logo,p.away_team)}</div>
+          <div class="dt-name">${p.away_team||'—'}</div>
+          <span style="font-size:11px;color:var(--txt3)">AWAY</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="three-col">
+      <div class="card">
+        <div class="card-hd">Probability</div>
+        <canvas id="ch-prob" height="180"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-hd">Home Team Metrics</div>
+        <canvas id="ch-home-radar" height="180"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-hd">Away Team Metrics</div>
+        <canvas id="ch-away-radar" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd">Team Metrics Comparison</div>
+        <canvas id="ch-compare" height="200"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-hd">Match Details</div>
+        <table class="tbl">
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">Avg Odds H</td><td style="text-align:right;font-family:var(--mono);font-size:12px;border-bottom:1px solid rgba(30,45,71,.4)">${p.avg_h||'—'}</td></tr>
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">Avg Odds D</td><td style="text-align:right;font-family:var(--mono);font-size:12px;border-bottom:1px solid rgba(30,45,71,.4)">${p.avg_d||'—'}</td></tr>
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">Avg Odds A</td><td style="text-align:right;font-family:var(--mono);font-size:12px;border-bottom:1px solid rgba(30,45,71,.4)">${p.avg_a||'—'}</td></tr>
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">Confidence</td><td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--green);border-bottom:1px solid rgba(30,45,71,.4)">${Math.round((p.confidence||0)*100)}%</td></tr>
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0;border-bottom:1px solid rgba(30,45,71,.4)">Actual Result</td><td style="text-align:right;font-size:12px;border-bottom:1px solid rgba(30,45,71,.4)">${p.actual_result?`<span class="badge ${p.actual_result==='H'?'hw':p.actual_result==='D'?'dr':'aw'}">${p.actual_result==='H'?'Home':p.actual_result==='D'?'Draw':'Away'}</span>`:'<span style="color:var(--txt3)">Pending</span>'}</td></tr>
+          <tr><td style="color:var(--txt3);font-size:12px;padding:9px 0">Model Correct</td><td style="text-align:right;font-size:12px">${p.model_was_correct===true?'<span class="badge ok">Yes</span>':p.model_was_correct===false?'<span class="badge no">No</span>':'<span style="color:var(--txt3)">—</span>'}</td></tr>
+        </table>
+      </div>
+    </div>
+  `;
+  buildCharts(p,pH,pD,pA);
+}
+
+function buildCharts(p,pH,pD,pA){
+  const CHART_DEFAULTS={color:'#8096b8',borderColor:'#1e2d47',backgroundColor:'transparent'};
+  Chart.defaults.color='#8096b8';
+
+  // Probability doughnut
+  const cp=document.getElementById('ch-prob').getContext('2d');
+  new Chart(cp,{type:'doughnut',data:{labels:['Home Win','Draw','Away Win'],datasets:[{data:[pH,pD,pA],backgroundColor:['rgba(0,212,240,.8)','rgba(255,179,0,.8)','rgba(244,67,54,.8)'],borderColor:['#00d4f0','#ffb300','#f44336'],borderWidth:2,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,boxWidth:10}}},cutout:'65%'}});
+
+  // Home radar
+  const hr=document.getElementById('ch-home-radar').getContext('2d');
+  new Chart(hr,{type:'radar',data:{labels:['Attacking','Defending','Volatility','Efficiency'],datasets:[{label:p.home_team,data:[p.h_attacking||0,p.h_defending||0,p.h_volatility||0,p.h_efficiency||0],backgroundColor:'rgba(0,212,240,.15)',borderColor:'#00d4f0',pointBackgroundColor:'#00d4f0',pointRadius:3,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:true,scales:{r:{ticks:{display:false,stepSize:20},grid:{color:'rgba(30,45,71,.6)'},pointLabels:{font:{size:11}},min:0,max:100}},plugins:{legend:{display:false}}}});
+
+  // Away radar
+  const ar=document.getElementById('ch-away-radar').getContext('2d');
+  new Chart(ar,{type:'radar',data:{labels:['Attacking','Defending','Volatility','Efficiency'],datasets:[{label:p.away_team,data:[p.a_attacking||0,p.a_defending||0,p.a_volatility||0,p.a_efficiency||0],backgroundColor:'rgba(244,67,54,.15)',borderColor:'#f44336',pointBackgroundColor:'#f44336',pointRadius:3,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:true,scales:{r:{ticks:{display:false,stepSize:20},grid:{color:'rgba(30,45,71,.6)'},pointLabels:{font:{size:11}},min:0,max:100}},plugins:{legend:{display:false}}}});
+
+  // Grouped bar comparison
+  const bc=document.getElementById('ch-compare').getContext('2d');
+  new Chart(bc,{type:'bar',data:{
+    labels:['Attacking','Defending','Volatility','Efficiency'],
+    datasets:[
+      {label:p.home_team||'Home',data:[p.h_attacking,p.h_defending,p.h_volatility,p.h_efficiency].map(v=>Math.round(v||0)),backgroundColor:'rgba(0,212,240,.6)',borderColor:'#00d4f0',borderWidth:1,borderRadius:3},
+      {label:p.away_team||'Away',data:[p.a_attacking,p.a_defending,p.a_volatility,p.a_efficiency].map(v=>Math.round(v||0)),backgroundColor:'rgba(244,67,54,.6)',borderColor:'#f44336',borderWidth:1,borderRadius:3}
+    ]
+  },options:{responsive:true,maintainAspectRatio:true,scales:{
+    y:{grid:{color:'rgba(30,45,71,.5)'},ticks:{font:{size:10}},min:0,max:100},
+    x:{grid:{display:false},ticks:{font:{size:10}}}
+  },plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12,boxWidth:10}}}}});
+}
+
+/* ── HISTORY ── */
+async function loadHistory(){
+  document.getElementById('hist-body').innerHTML='<div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  try{
+    const r=await api(`/prediction-history?skip=${histPage*20}&limit=20`);
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    const items=d.items||[];
+    document.getElementById('hist-count').textContent=d.total||items.length;
+    if(!items.length){document.getElementById('hist-body').innerHTML='<div class="empty">No history records</div>';return;}
+    document.getElementById('hist-body').innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Date</th><th>Home</th><th>Away</th><th>H / D / A</th><th>Prediction</th><th>Actual</th><th>Result</th>
+    </tr></thead><tbody>${items.map(p=>{
+      const pH=Math.round((p.prob_home||0)*100),pD=Math.round((p.prob_draw||0)*100),pA=Math.round((p.prob_away||0)*100);
+      return`<tr>
+        <td class="mono" style="color:var(--txt3)">${fmt(p.match_date)}</td>
+        <td class="txt">${p.home_team}</td>
+        <td class="txt">${p.away_team}</td>
+        <td class="mono"><span style="color:var(--cyan)">${pH}%</span> / <span style="color:var(--amber)">${pD}%</span> / <span style="color:var(--red)">${pA}%</span></td>
+        <td><span class="badge ${badgeClass(p.outcome)}">${badgeLabel(p.outcome)}</span></td>
+        <td>${p.actual_result?`<span class="badge ${p.actual_result==='H'?'hw':p.actual_result==='D'?'dr':'aw'}">${p.actual_result==='H'?'Home':p.actual_result==='D'?'Draw':'Away'}</span>`:'<span style="color:var(--txt3);font-size:11px">—</span>'}</td>
+        <td>${p.model_was_correct===true?'<span class="badge ok">Correct</span>':p.model_was_correct===false?'<span class="badge no">Wrong</span>':'<span class="badge pend">Pending</span>'}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+    renderPag('hist-pag',histPage,items.length,()=>{histPage--;loadHistory();},()=>{histPage++;loadHistory();});
+  }catch(e){document.getElementById('hist-body').innerHTML='<div class="empty">Failed to load history</div>';}
+}
+
+/* ── PROFILE ── */
+async function loadProfile(){
+  try{
+    const r=await api('/user');if(!r.ok)throw new Error();
+    const u=await r.json();ME=u;
+    const ini=initials(u.full_name||u.email);
+    document.getElementById('prof-avatar').textContent=ini;
+    document.getElementById('prof-name').textContent=u.full_name||'—';
+    document.getElementById('prof-email').textContent=u.email||'—';
+    document.getElementById('prof-admin-badge').innerHTML=u.is_admin?'<span class="badge admin">Administrator</span>':'';
+    document.getElementById('prof-details').innerHTML=`
+      <div style="display:flex;flex-direction:column;gap:0">
+        ${[['User ID','#'+u.id],['Full Name',u.full_name||'—'],['Email',u.email||'—'],['Role',u.is_admin?'Administrator':'Analyst']].map(([l,v])=>`
+          <div style="padding:14px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3);font-weight:600;margin-bottom:4px">${l}</div>
+            <div style="font-size:13px;font-weight:500;color:var(--txt)">${v}</div>
+          </div>`).join('')}
+      </div>`;
+  }catch(e){document.getElementById('prof-details').innerHTML='<div class="empty">Failed to load profile</div>';}
+}
+
+/* ── ADMIN ── */
+function adminTab(t){
+  document.querySelectorAll('.admin-tab').forEach((b,i)=>b.classList.toggle('active',['users','system','logs','inference'][i]===t));
+  document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('asec-'+t).classList.add('active');
+  if(t==='users')loadAdminUsers();
+  if(t==='system')loadSystemHealth();
+  if(t==='logs')loadAuditLogs();
+}
+
+async function loadAdminUsers(){
+  document.getElementById('admin-users').innerHTML='<div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  try{
+    const r=await api('/users?skip=0&limit=50');if(!r.ok)throw new Error();
+    const txt=await r.text();let items=[];
+    try{const j=JSON.parse(txt);items=Array.isArray(j)?j:(j.items||[]);}catch(e){}
+    if(!items.length){document.getElementById('admin-users').innerHTML='<div class="empty">No users found</div>';return;}
+    document.getElementById('admin-users').innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Actions</th>
+    </tr></thead><tbody>${items.map(u=>`<tr>
+      <td class="mono" style="color:var(--txt3)">#${u.id}</td>
+      <td class="txt">${u.full_name||'—'}</td>
+      <td style="color:var(--txt2)">${u.email}</td>
+      <td>${u.is_admin?'<span class="badge admin">Admin</span>':'<span class="badge pend">Analyst</span>'}</td>
+      <td><button onclick="deleteUser(${u.id})" style="padding:4px 10px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.2);border-radius:4px;color:var(--red);font-size:10px;cursor:pointer">Delete</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+  }catch(e){document.getElementById('admin-users').innerHTML='<div class="empty">Could not load users</div>';}
+}
+
+async function deleteUser(id){
+  if(!confirm('Delete user #'+id+'?'))return;
+  try{
+    const r=await api('/user/'+id,{method:'DELETE'});
+    if(r.ok){loadAdminUsers();}
+    else alert('Delete failed.');
+  }catch(e){alert('Error.');}
+}
+
+async function loadSystemHealth(){
+  try{
+    const r=await fetch(API+'/health');
+    if(r.ok){
+      const h=await r.json();
+      document.getElementById('sys-db').textContent=h.services?.database||'—';
+      document.getElementById('sys-sched').textContent=h.services?.scheduler||'—';
+      document.getElementById('sys-model').textContent=h.services?.model_files||'—';
+      document.getElementById('sys-api').textContent=h.status==='healthy'?'healthy':'error';
+      document.getElementById('sys-api').style.color=h.status==='healthy'?'var(--green)':'var(--red)';
+    }
+  }catch(e){}
+  try{
+    const r=await api('/system-logs?skip=0&limit=20');
+    if(r.ok){
+      const txt=await r.text();let items=[];
+      try{const j=JSON.parse(txt);items=Array.isArray(j)?j:(j.items||[]);}catch(e){}
+      document.getElementById('sys-logs').innerHTML=items.length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Event</th></tr></thead><tbody>${
+        items.map(l=>`<tr><td class="mono" style="color:var(--txt3)">${fmt(l.created_at||l.timestamp)}</td><td style="color:var(--txt2);font-size:12px">${l.message||l.event||JSON.stringify(l)}</td></tr>`).join('')
+      }</tbody></table></div>`:'<div class="empty">No system logs</div>';
+    }
+  }catch(e){document.getElementById('sys-logs').innerHTML='<div class="empty">Could not load logs</div>';}
+}
+
+async function loadAuditLogs(){
+  document.getElementById('audit-logs').innerHTML='<div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  try{
+    const r=await api('/audit-logs?skip=0&limit=30');if(!r.ok)throw new Error();
+    const txt=await r.text();let items=[];
+    try{const j=JSON.parse(txt);items=Array.isArray(j)?j:(j.items||[]);}catch(e){}
+    document.getElementById('audit-logs').innerHTML=items.length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>User</th><th>Action</th></tr></thead><tbody>${
+      items.map(l=>`<tr><td class="mono" style="color:var(--txt3)">${fmt(l.created_at||l.timestamp)}</td><td style="color:var(--txt2);font-size:12px">${l.user_id||'—'}</td><td style="color:var(--txt2);font-size:12px">${l.action||l.message||JSON.stringify(l)}</td></tr>`).join('')
+    }</tbody></table></div>`:'<div class="empty">No audit logs</div>';
+  }catch(e){document.getElementById('audit-logs').innerHTML='<div class="empty">Could not load audit logs</div>';}
+}
+
+async function triggerInference(){
+  const btn=document.getElementById('infer-btn');
+  const res=document.getElementById('infer-result');
+  btn.disabled=true;btn.textContent='Running…';
+  res.style.display='none';
+  try{
+    const r=await api('/run-inference',{method:'POST'});
+    const txt=await r.text();
+    res.style.display='block';
+    res.style.color='var(--green)';
+    res.textContent='✓ Inference triggered successfully. Predictions will update shortly.';
+  }catch(e){
+    res.style.display='block';res.style.color='var(--red)';res.textContent='✕ Failed to trigger inference.';
+  }finally{btn.disabled=false;btn.textContent='▶ Run Inference';}
+}
+
+async function refreshAccuracy(){
+  const res=document.getElementById('acc-result');
+  res.style.display='none';
+  try{
+    const r=await api('/prediction-accuracy/refresh',{method:'POST'});
+    if(r.ok){
+      res.style.display='block';res.style.color='var(--green)';
+      res.textContent='✓ Accuracy statistics refreshed.';
+    }else throw new Error();
+  }catch(e){res.style.display='block';res.style.color='var(--red)';res.textContent='✕ Refresh failed.';}
+}
+
+/* ── PAGINATION ── */
+function renderPag(id,page,count,prev,next){
+  const el=document.getElementById(id);
+  el.innerHTML=`<button class="pag-btn" onclick="(${prev.toString()})()" ${page===0?'disabled':''}>← Prev</button><span class="pag-info">Page ${page+1}</span><button class="pag-btn" onclick="(${next.toString()})()" ${count<LIMIT?'disabled':''}>Next →</button>`;
+}
+
+/* ── REFRESH ── */
+function refreshCurrent(){
+  const pages={dashboard:loadDashboard,predictions:loadPredictions,history:loadHistory,profile:loadProfile,admin:()=>{loadAdminUsers();loadSystemHealth();}};
+  const active=document.querySelector('.page.active')?.id?.replace('page-','');
+  if(active&&pages[active])pages[active]();
+}
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded',()=>{
+  if(TOKEN)bootApp();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&document.getElementById('auth-shell').style.display==='flex'){
+    const loginVisible=document.getElementById('form-login').style.display!=='none';
+    if(loginVisible)doLogin();else doRegister();
+  }
+});
+</script>
+</body>
+</html>
