@@ -684,20 +684,138 @@ def create_milestone_notifications(db: Session):
         logger.error(f"Failed to create milestone notifications: {e}")
 
 
+# def compute_prediction_accuracy(db: Session):
+#     """Analyze the last 20 historical matches vs predictions and compute accuracy metrics."""
+#     try:
+#         logger.info("Starting prediction accuracy computation...")
+        
+#         # Get the last 20 historical matches (most recent first)
+#         historical_matches = db.query(models.HistoricalMatch).order_by(models.HistoricalMatch.date.desc()).limit(20).all()
+#         logger.info(f"Found {len(historical_matches)} historical matches (last 20)")
+        
+#         # Get all prediction history entries
+#         predictions = db.query(models.PredictionHistory).all()
+#         logger.info(f"Found {len(predictions)} prediction history entries")
+        
+#         # Create lookup dictionaries for faster matching
+#         hist_lookup = {}
+#         for match in historical_matches:
+#             key = (match.date.date(), match.home_team.lower(), match.away_team.lower())
+#             hist_lookup[key] = match
+        
+#         pred_lookup = {}
+#         for pred in predictions:
+#             key = (pred.match_date.date(), pred.home_team.lower(), pred.away_team.lower())
+#             pred_lookup[key] = pred
+        
+#         updated_predictions = []
+#         total_checked = 0
+#         correct_predictions = 0
+#         home_correct = 0
+#         draw_correct = 0
+#         away_correct = 0
+        
+#         # Match predictions with historical results for the last 20 matches
+#         for pred_key, prediction in pred_lookup.items():
+#             if pred_key in hist_lookup:
+#                 historical = hist_lookup[pred_key]
+#                 total_checked += 1
+                
+#                 # Map historical result to our format
+#                 actual_result = historical.ftr  # H, D, A
+                
+#                 # Determine if prediction was correct
+#                 predicted_outcome = prediction.outcome
+#                 was_correct = False
+                
+#                 if predicted_outcome == "Home Win" and actual_result == "H":
+#                     was_correct = True
+#                     home_correct += 1
+#                 elif predicted_outcome == "Draw" and actual_result == "D":
+#                     was_correct = True
+#                     draw_correct += 1
+#                 elif predicted_outcome == "Away Win" and actual_result == "A":
+#                     was_correct = True
+#                     away_correct += 1
+                
+#                 if was_correct:
+#                     correct_predictions += 1
+                
+#                 # Update the prediction record
+#                 prediction.actual_result = actual_result
+#                 prediction.model_was_correct = was_correct
+#                 updated_predictions.append(prediction)
+                
+#                 logger.debug(f"Match {historical.home_team} vs {historical.away_team}: Predicted {predicted_outcome}, Actual {actual_result}, Correct: {was_correct}")
+        
+#         # Save updates to database
+#         if updated_predictions:
+#             db.bulk_save_objects(updated_predictions)
+#             db.commit()
+#             logger.info(f"Updated {len(updated_predictions)} prediction records with actual results")
+        
+#         # Calculate accuracy metrics
+#         accuracy = (correct_predictions / total_checked * 100) if total_checked > 0 else 0
+        
+#         # Calculate confidence-based accuracy
+#         high_conf_correct = 0
+#         high_conf_total = 0
+#         for pred in updated_predictions:
+#             if pred.confidence > 0.7:
+#                 high_conf_total += 1
+#                 if pred.model_was_correct:
+#                     high_conf_correct += 1
+        
+#         high_conf_accuracy = (high_conf_correct / high_conf_total * 100) if high_conf_total > 0 else 0
+        
+#         # Calculate recent accuracy (last 30 days)
+#         thirty_days_ago = datetime.utcnow() - pd.Timedelta(days=30)
+#         recent_predictions = [p for p in updated_predictions if p.match_date >= thirty_days_ago]
+#         recent_correct = sum(1 for p in recent_predictions if p.model_was_correct)
+#         recent_accuracy = (recent_correct / len(recent_predictions) * 100) if recent_predictions else 0
+        
+#         accuracy_stats = {
+#             "total_predictions_analyzed": total_checked,
+#             "correct_predictions": correct_predictions,
+#             "overall_accuracy": round(accuracy, 2),
+#             "home_win_accuracy": round((home_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+#             "draw_accuracy": round((draw_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+#             "away_win_accuracy": round((away_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+#             "high_confidence_accuracy": round(high_conf_accuracy, 2),
+#             "high_confidence_predictions": high_conf_total,
+#             "recent_accuracy_30_days": round(recent_accuracy, 2),
+#             "recent_predictions_count": len(recent_predictions),
+#             "last_updated": datetime.utcnow().isoformat()
+#         }
+        
+#         logger.info(f"Accuracy computation complete: {accuracy:.2f}% overall accuracy from last {total_checked} matches")
+#         return accuracy_stats
+        
+#     except Exception as e:
+#         logger.error(f"Failed to compute prediction accuracy: {e}")
+#         db.rollback()
+#         return {
+#             "error": str(e),
+#             "total_predictions_analyzed": 0,
+#             "correct_predictions": 0,
+#             "overall_accuracy": 0.0,
+#             "last_updated": datetime.utcnow().isoformat()
+#         }
+
+
 def compute_prediction_accuracy(db: Session):
-    """Analyze the last 10 historical matches vs predictions and compute accuracy metrics."""
+    """Analyze the last 20 historical matches vs predictions and compute accuracy metrics."""
     try:
         logger.info("Starting prediction accuracy computation...")
         
-        # Get the last 10 historical matches (most recent first)
-        historical_matches = db.query(models.HistoricalMatch).order_by(models.HistoricalMatch.date.desc()).limit(10).all()
-        logger.info(f"Found {len(historical_matches)} historical matches (last 10)")
+        # Get the last 20 historical matches (most recent first)
+        historical_matches = db.query(models.HistoricalMatch).order_by(models.HistoricalMatch.date.desc()).limit(20).all()
+        logger.info(f"Found {len(historical_matches)} historical matches (last 20)")
         
         # Get all prediction history entries
         predictions = db.query(models.PredictionHistory).all()
         logger.info(f"Found {len(predictions)} prediction history entries")
         
-        # Create lookup dictionaries for faster matching
         hist_lookup = {}
         for match in historical_matches:
             key = (match.date.date(), match.home_team.lower(), match.away_team.lower())
@@ -711,11 +829,16 @@ def compute_prediction_accuracy(db: Session):
         updated_predictions = []
         total_checked = 0
         correct_predictions = 0
-        home_correct = 0
-        draw_correct = 0
-        away_correct = 0
         
-        # Match predictions with historical results for the last 10 matches
+        # Track counts for each prediction type to calculate true accuracy
+        home_correct = 0
+        home_total_pred = 0
+        draw_correct = 0
+        draw_total_pred = 0
+        away_correct = 0
+        away_total_pred = 0
+        
+        # Match predictions with historical results for the last 20 matches
         for pred_key, prediction in pred_lookup.items():
             if pred_key in hist_lookup:
                 historical = hist_lookup[pred_key]
@@ -728,15 +851,22 @@ def compute_prediction_accuracy(db: Session):
                 predicted_outcome = prediction.outcome
                 was_correct = False
                 
-                if predicted_outcome == "Home Win" and actual_result == "H":
-                    was_correct = True
-                    home_correct += 1
-                elif predicted_outcome == "Draw" and actual_result == "D":
-                    was_correct = True
-                    draw_correct += 1
-                elif predicted_outcome == "Away Win" and actual_result == "A":
-                    was_correct = True
-                    away_correct += 1
+                # Update specific category totals and check correctness
+                if predicted_outcome == "Home Win":
+                    home_total_pred += 1
+                    if actual_result == "H":
+                        was_correct = True
+                        home_correct += 1
+                elif predicted_outcome == "Draw":
+                    draw_total_pred += 1
+                    if actual_result == "D":
+                        was_correct = True
+                        draw_correct += 1
+                elif predicted_outcome == "Away Win":
+                    away_total_pred += 1
+                    if actual_result == "A":
+                        was_correct = True
+                        away_correct += 1
                 
                 if was_correct:
                     correct_predictions += 1
@@ -754,7 +884,7 @@ def compute_prediction_accuracy(db: Session):
             db.commit()
             logger.info(f"Updated {len(updated_predictions)} prediction records with actual results")
         
-        # Calculate accuracy metrics
+        # Calculate overall accuracy
         accuracy = (correct_predictions / total_checked * 100) if total_checked > 0 else 0
         
         # Calculate confidence-based accuracy
@@ -778,14 +908,16 @@ def compute_prediction_accuracy(db: Session):
             "total_predictions_analyzed": total_checked,
             "correct_predictions": correct_predictions,
             "overall_accuracy": round(accuracy, 2),
-            "home_win_accuracy": round((home_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
-            "draw_accuracy": round((draw_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
-            "away_win_accuracy": round((away_correct / (home_correct + draw_correct + away_correct) * 100) if (home_correct + draw_correct + away_correct) > 0 else 0, 2),
+            # Corrected denominator: Now divides by total predictions of that specific type
+            "home_win_accuracy": round((home_correct / home_total_pred * 100) if home_total_pred > 0 else 0, 2),
+            "draw_accuracy": round((draw_correct / draw_total_pred * 100) if draw_total_pred > 0 else 0, 2),
+            "away_win_accuracy": round((away_correct / away_total_pred * 100) if away_total_pred > 0 else 0, 2),
             "high_confidence_accuracy": round(high_conf_accuracy, 2),
             "high_confidence_predictions": high_conf_total,
             "recent_accuracy_30_days": round(recent_accuracy, 2),
             "recent_predictions_count": len(recent_predictions),
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.utcnow().isoformat(),
+            "error": None
         }
         
         logger.info(f"Accuracy computation complete: {accuracy:.2f}% overall accuracy from last {total_checked} matches")
@@ -804,7 +936,7 @@ def compute_prediction_accuracy(db: Session):
 
 
 def get_prediction_accuracy_stats(db: Session):
-    """Get cached or compute fresh accuracy statistics for the last 10 matches."""
+    """Get cached or compute fresh accuracy statistics for the last 20 matches."""
     try:
         # Try to get from cache first (you could implement caching here)
         # For now, always compute fresh
@@ -818,3 +950,64 @@ def get_prediction_accuracy_stats(db: Session):
             "overall_accuracy": 0.0,
             "last_updated": datetime.utcnow().isoformat()
         }
+        
+def get_league_standings():
+    """Fetches the current Premier League standings table."""
+    headers = {'X-Auth-Token': FOOTBALL_DATA_API_KEY}
+    url = "https://api.football-data.org/v4/competitions/PL/standings"
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        standings_list = data.get('standings', [])
+        total_table = next((s['table'] for s in standings_list if s['type'] == 'TOTAL'), [])
+        
+        return {
+            "success": True,
+            "season": data.get("season", {}).get("startDate", "")[:4],
+            "data": [
+                {
+                    "position": row["position"],
+                    "team": row["team"]["shortName"],
+                    "played": row["playedGames"],
+                    "won": row["won"],
+                    "draw": row["draw"],
+                    "lost": row["lost"],
+                    "points": row["points"],
+                    "gd": row["goalDifference"],
+                    "Logo": row["team"]["crest"]
+                } for row in total_table
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching standings: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_league_top_scorers():
+    """Fetches the current top scorers for the Premier League."""
+    headers = {'X-Auth-Token': FOOTBALL_DATA_API_KEY}
+    url = "https://api.football-data.org/v4/competitions/PL/scorers"
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        return {
+            "success": True,
+            "data": [
+                {
+                    "name": player["player"]["name"],
+                    "team": player["team"]["shortName"],
+                    "goals": player["goals"],
+                    "assists": player.get("assists"),
+                    "played": player.get("playedMatches")
+                } for player in data.get("scorers", [])
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching scorers: {e}")
+        return {"success": False, "error": str(e)}
+    

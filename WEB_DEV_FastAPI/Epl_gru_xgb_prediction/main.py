@@ -23,9 +23,11 @@ from pathlib import Path
 from typing import Generic, TypeVar
 from uuid import uuid4
 
+from prediction_engine import get_league_standings, get_league_top_scorers
+
 # --- PAGINATION ---
 T = TypeVar('T')
-
+ 
 class PaginatedResponse(BaseModel, Generic[T]):
     items: list[T]
     total: int
@@ -1190,3 +1192,30 @@ def get_system_logs(
         "skip": skip,
         "limit": limit
     }
+    
+@app.get("/standings")
+def get_standings(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+    ):
+    """Retrieve current Premier League standings."""
+    result = get_league_standings()
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@app.get("/top-scorers")
+def get_top_scorers(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retrieve current Premier League top scorers."""
+    result = get_league_top_scorers()
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
